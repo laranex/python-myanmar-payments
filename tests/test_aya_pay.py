@@ -227,7 +227,7 @@ class TestAyaPay:
         assert callback.order_id == "ORD123456"
         assert callback.gateway_reference == "TRN0001"
         assert callback.raw["userRef1"] == "cart-9"
-        assert callback.acknowledgement().status == 200
+        assert callback.acknowledgement.status == 200
 
     def test_verifies_a_form_callback_and_json_numbers(self) -> None:
         payload_json = (

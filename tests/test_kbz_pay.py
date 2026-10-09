@@ -93,6 +93,13 @@ class TestKbzPaySigner:
         assert not signer.verify({**fields, "sign": 1})
         assert not signer.verify(fields)
 
+    def test_rejects_fields_with_a_nested_value_even_when_the_sign_matches(self) -> None:
+        fields: dict[str, object] = {"a": "1", "list": None}
+        sign = signer.sign(fields)
+        assert signer.verify({**fields, "sign": sign})
+        assert not signer.verify({**fields, "list": [1], "sign": sign})
+        assert not signer.verify({**fields, "nested": {"x": 1}, "sign": sign})
+
 
 class TestKbzPay:
     def test_sends_a_signed_precreate_request_and_returns_the_pwa_url(
@@ -304,7 +311,7 @@ class TestKbzPay:
         assert result.gateway_reference is None
         assert result.status is PaymentStatus.PENDING
         assert str(result.raw["total_amount"]) == "1000.50"
-        assert result.raw["code"] == 0
+        assert result.raw["code"] == "0"
 
     def test_is_safe_for_concurrent_async_use(self) -> None:
         body = '{"Response":{"result":"SUCCESS","code":"0","prepay_id":"P","qrCode":"qr"}}'
@@ -346,9 +353,9 @@ class TestKbzPay:
         assert callback.gateway_reference == "0112345"
         assert callback.amount == "1000"
         assert callback.gateway_status == "PAY_SUCCESS"
-        assert callback.raw["notify_time"] == 1536637503
+        assert callback.raw["notify_time"] == "1536637503"
         assert callback.raw["merch_order_id"] == "ORDER_1"
-        ack = callback.acknowledgement()
+        ack = callback.acknowledgement
         assert ack.status == 200
         assert ack.body == "success"
         assert ack.headers == {"Content-Type": "text/plain"}

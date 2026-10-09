@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import httpx
 
@@ -33,6 +33,7 @@ from ._results import (
 from ._status import PaymentStatus, resolve_status
 from ._support import (
     EnvSource,
+    config_of,
     default_env,
     env_first,
     env_sandbox,
@@ -41,13 +42,14 @@ from ._support import (
     random_hex,
     require_setting,
     safe_equal,
+    sandbox_flag,
     sha256_hex,
     trim_url,
     unix_time,
     utc_now,
 )
 from ._validate import AmountRule, Validator
-from ._values import get, object_at, optional, scalar_string, trimmed
+from ._values import get, is_nested, object_at, optional, scalar_string, trimmed
 
 __all__ = [
     "AsyncKbzPay",
@@ -85,17 +87,17 @@ class KbzPayConfig:
     def __init__(
         self,
         *,
-        app_id: str,
-        app_key: str,
-        merchant_code: str,
-        sandbox: bool = True,
+        app_id: str = "",
+        app_key: str = "",
+        merchant_code: str = "",
+        sandbox: bool | str = True,
         api_url: str | None = None,
         pwa_url: str | None = None,
     ) -> None:
         self.app_id = require_setting("kbz_pay", "app_id", app_id)
         self.app_key = require_setting("kbz_pay", "app_key", app_key)
         self.merchant_code = require_setting("kbz_pay", "merchant_code", merchant_code)
-        self.sandbox = sandbox
+        self.sandbox = sandbox = sandbox_flag(sandbox)
         self.api_url = trim_url(
             optional_setting(api_url)
             or (self.SANDBOX_API_URL if sandbox else self.PRODUCTION_API_URL)
@@ -182,7 +184,13 @@ class KbzPaySigner:
         return sha256_hex(f"{self.sign_string(fields)}&key={self._app_key}").upper()
 
     def verify(self, fields: Mapping[str, object]) -> bool:
-        """Whether ``fields["sign"]`` matches, compared in constant time."""
+        """Whether ``fields["sign"]`` matches, compared in constant time.
+
+        Nested values are never signed, so fields carrying one are rejected
+        rather than partly trusted.
+        """
+        if any(is_nested(value) for value in fields.values()):
+            return False
         sign = fields.get("sign")
         return isinstance(sign, str) and safe_equal(self.sign(fields), sign.upper())
 
@@ -223,9 +231,9 @@ class _KbzPayBase:
     signer: KbzPaySigner
     """KBZ Pay's request signer, for custom calls."""
 
-    def __init__(self, config: KbzPayConfig) -> None:
-        self.config = config
-        self.signer = KbzPaySigner(config.app_key)
+    def __init__(self, config: KbzPayConfig | Mapping[str, Any]) -> None:
+        self.config = config_of(KbzPayConfig, config)
+        self.signer = KbzPaySigner(self.config.app_key)
 
     @staticmethod
     def validate(data: KbzPayPaymentData) -> None:
@@ -263,7 +271,7 @@ class _KbzPayBase:
     def handle_callback(self, request: CallbackRequest) -> PaymentCallback:
         """Verifies KBZ Pay's payment notification.
 
-        Reply with the callback's ``acknowledgement()`` (plain ``success``) or KBZ
+        Reply with the callback's ``acknowledgement`` (plain ``success``) or KBZ
         retries.
         """
         payload = lossless_body(request)
@@ -453,7 +461,7 @@ class KbzPay(_KbzPayBase, SyncGateway):
 
     def __init__(
         self,
-        config: KbzPayConfig,
+        config: KbzPayConfig | Mapping[str, Any],
         *,
         http_client: httpx.Client | None = None,
         timeout: float | None = DEFAULT_TIMEOUT,
@@ -507,7 +515,7 @@ class AsyncKbzPay(_KbzPayBase, AsyncGateway):
 
     def __init__(
         self,
-        config: KbzPayConfig,
+        config: KbzPayConfig | Mapping[str, Any],
         *,
         http_client: httpx.AsyncClient | None = None,
         timeout: float | None = DEFAULT_TIMEOUT,

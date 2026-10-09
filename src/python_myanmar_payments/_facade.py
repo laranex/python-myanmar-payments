@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from types import TracebackType
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import httpx
 
 from ._cache import AsyncTokenCache, MemoryTokenCache, TokenCache
 from ._errors import ConfigurationError
 from ._http import DEFAULT_TIMEOUT
-from ._support import EnvSource
+from ._support import EnvSource, config_of
 from .aya_pay import AsyncAyaPay, AyaPay, AyaPayConfig
 from .cyber_source import CyberSource, CyberSourceConfig
 from .kbz_pay import AsyncKbzPay, KbzPay, KbzPayConfig
@@ -23,8 +23,8 @@ __all__ = ["AsyncMyanmarPayments", "MyanmarPayments"]
 _C = TypeVar("_C")
 
 
-def _lazy(config: _C | None) -> Callable[[], _C] | None:
-    return None if config is None else lambda: config
+def _lazy(config_class: type[_C], config: _C | Mapping[str, Any] | None) -> Callable[[], _C] | None:
+    return None if config is None else lambda: config_of(config_class, config)
 
 
 def _resolve(source: Callable[[], _C] | None, gateway: str, first_key: str) -> _C:
@@ -38,18 +38,18 @@ class _Payments:
 
     def __init__(
         self,
-        kbz_pay: KbzPayConfig | None,
-        wave_money: WaveMoneyConfig | None,
-        aya_pay: AyaPayConfig | None,
-        yoma_mmqr: YomaMmqrConfig | None,
-        cyber_source: CyberSourceConfig | None,
+        kbz_pay: KbzPayConfig | Mapping[str, Any] | None,
+        wave_money: WaveMoneyConfig | Mapping[str, Any] | None,
+        aya_pay: AyaPayConfig | Mapping[str, Any] | None,
+        yoma_mmqr: YomaMmqrConfig | Mapping[str, Any] | None,
+        cyber_source: CyberSourceConfig | Mapping[str, Any] | None,
         timeout: float | None,
     ) -> None:
-        self._kbz_pay_config = _lazy(kbz_pay)
-        self._wave_money_config = _lazy(wave_money)
-        self._aya_pay_config = _lazy(aya_pay)
-        self._yoma_mmqr_config = _lazy(yoma_mmqr)
-        self._cyber_source_config = _lazy(cyber_source)
+        self._kbz_pay_config = _lazy(KbzPayConfig, kbz_pay)
+        self._wave_money_config = _lazy(WaveMoneyConfig, wave_money)
+        self._aya_pay_config = _lazy(AyaPayConfig, aya_pay)
+        self._yoma_mmqr_config = _lazy(YomaMmqrConfig, yoma_mmqr)
+        self._cyber_source_config = _lazy(CyberSourceConfig, cyber_source)
         self._timeout = timeout
         self._cyber_source: CyberSource | None = None
 
@@ -79,11 +79,11 @@ class MyanmarPayments(_Payments):
     def __init__(
         self,
         *,
-        kbz_pay: KbzPayConfig | None = None,
-        wave_money: WaveMoneyConfig | None = None,
-        aya_pay: AyaPayConfig | None = None,
-        yoma_mmqr: YomaMmqrConfig | None = None,
-        cyber_source: CyberSourceConfig | None = None,
+        kbz_pay: KbzPayConfig | Mapping[str, Any] | None = None,
+        wave_money: WaveMoneyConfig | Mapping[str, Any] | None = None,
+        aya_pay: AyaPayConfig | Mapping[str, Any] | None = None,
+        yoma_mmqr: YomaMmqrConfig | Mapping[str, Any] | None = None,
+        cyber_source: CyberSourceConfig | Mapping[str, Any] | None = None,
         token_cache: TokenCache | None = None,
         http_client: httpx.Client | None = None,
         timeout: float | None = DEFAULT_TIMEOUT,
@@ -181,11 +181,11 @@ class AsyncMyanmarPayments(_Payments):
     def __init__(
         self,
         *,
-        kbz_pay: KbzPayConfig | None = None,
-        wave_money: WaveMoneyConfig | None = None,
-        aya_pay: AyaPayConfig | None = None,
-        yoma_mmqr: YomaMmqrConfig | None = None,
-        cyber_source: CyberSourceConfig | None = None,
+        kbz_pay: KbzPayConfig | Mapping[str, Any] | None = None,
+        wave_money: WaveMoneyConfig | Mapping[str, Any] | None = None,
+        aya_pay: AyaPayConfig | Mapping[str, Any] | None = None,
+        yoma_mmqr: YomaMmqrConfig | Mapping[str, Any] | None = None,
+        cyber_source: CyberSourceConfig | Mapping[str, Any] | None = None,
         token_cache: TokenCache | AsyncTokenCache | None = None,
         http_client: httpx.AsyncClient | None = None,
         timeout: float | None = DEFAULT_TIMEOUT,

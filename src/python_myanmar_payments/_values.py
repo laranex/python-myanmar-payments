@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from ._json import JsonNumber, LosslessObject
 
-__all__ = ["get", "object_at", "optional", "scalar_string", "trimmed"]
+__all__ = ["get", "is_nested", "object_at", "optional", "scalar_string", "trimmed"]
 
 
 def scalar_string(value: object) -> str | None:
@@ -30,6 +30,11 @@ def scalar_string(value: object) -> str | None:
     if isinstance(value, Decimal):
         return str(value) if value.is_finite() else None
     return None
+
+
+def is_nested(value: object) -> bool:
+    """Whether ``value`` is an object or a list, which no gateway signs."""
+    return isinstance(value, (dict, list))
 
 
 def get(source: Mapping[str, object], key: str) -> str:

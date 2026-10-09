@@ -24,6 +24,7 @@ from ._results import FormField, FormPayment, PaymentCallback, PaymentStatusResu
 from ._status import PaymentStatus, _StrEnum, resolve_status
 from ._support import (
     EnvSource,
+    config_of,
     decode_base64,
     default_env,
     env_first,
@@ -32,11 +33,12 @@ from ._support import (
     optional_setting,
     require_setting,
     safe_equal,
+    sandbox_flag,
     trim_url,
     unix_time,
 )
 from ._validate import AmountRule, Validator
-from ._values import get, object_at, optional, scalar_string, trimmed
+from ._values import get, is_nested, object_at, optional, scalar_string, trimmed
 
 __all__ = [
     "AsyncAyaPay",
@@ -69,14 +71,14 @@ class AyaPayConfig:
     def __init__(
         self,
         *,
-        app_key: str,
-        app_secret: str,
-        sandbox: bool = True,
+        app_key: str = "",
+        app_secret: str = "",
+        sandbox: bool | str = True,
         base_url: str | None = None,
     ) -> None:
         self.app_key = require_setting("aya_pay", "app_key", app_key)
         self.app_secret = require_setting("aya_pay", "app_secret", app_secret)
-        self.sandbox = sandbox
+        self.sandbox = sandbox = sandbox_flag(sandbox)
         self.base_url = trim_url(
             optional_setting(base_url) or (self.SANDBOX_URL if sandbox else self.PRODUCTION_URL)
         )
@@ -211,8 +213,8 @@ class _AyaPayBase:
     config: AyaPayConfig
     """The configuration in use."""
 
-    def __init__(self, config: AyaPayConfig) -> None:
-        self.config = config
+    def __init__(self, config: AyaPayConfig | Mapping[str, Any]) -> None:
+        self.config = config_of(AyaPayConfig, config)
 
     @staticmethod
     def validate(data: AyaPayPaymentData) -> None:
@@ -405,6 +407,8 @@ class _AyaPayBase:
         for name in _PAYLOAD_FIELDS:
             key = "currenyCode" if name == "currencyCode" and "currenyCode" in payload else name
             if key in payload:
+                if is_nested(payload[key]):
+                    raise fail()
                 parts.append(scalar_string(payload[key]) or "")
 
         if not safe_equal(self._checksum(parts), get(data, "checkSum").lower()):
@@ -437,7 +441,7 @@ class AyaPay(_AyaPayBase, SyncGateway):
 
     def __init__(
         self,
-        config: AyaPayConfig,
+        config: AyaPayConfig | Mapping[str, Any],
         *,
         http_client: httpx.Client | None = None,
         timeout: float | None = DEFAULT_TIMEOUT,
@@ -475,7 +479,7 @@ class AsyncAyaPay(_AyaPayBase, AsyncGateway):
 
     def __init__(
         self,
-        config: AyaPayConfig,
+        config: AyaPayConfig | Mapping[str, Any],
         *,
         http_client: httpx.AsyncClient | None = None,
         timeout: float | None = DEFAULT_TIMEOUT,

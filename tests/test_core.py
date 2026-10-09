@@ -73,8 +73,8 @@ class TestCallbackRequest:
         )
         assert lossless_body(json)["amount"] == JsonNumber("1000.50")
         assert json.parsed_body() == {
-            "amount": Decimal("1000.50"),
-            "count": 7,
+            "amount": "1000.50",
+            "count": "7",
             "nested": {"a": "b"},
         }
         assert json.input()["q"] == "1"
@@ -142,7 +142,7 @@ class TestCallbackRequest:
         assert request.body == '{"orderId":"ORDER_1","amount":1000,"exact":"10.50"}'
         assert request.header("Content-Type") == "application/json"
         assert request.header("x-signature") == "sig"
-        assert request.input() == {"orderId": "ORDER_1", "amount": 1000, "exact": "10.50"}
+        assert request.input() == {"orderId": "ORDER_1", "amount": "1000", "exact": "10.50"}
         assert CallbackRequest.from_json({}).header("content-type") == "application/json"
         assert "CallbackRequest(body='{}'" in repr(CallbackRequest.from_json({}))
 
@@ -200,7 +200,15 @@ class TestResults:
             order_id="O1", status=PaymentStatus.SUCCESSFUL, gateway_status="PAID"
         )
         assert callback.is_successful()
-        assert callback.acknowledgement() == Acknowledgement.default()
+        assert callback.acknowledgement == Acknowledgement.default()
+        assert not callable(callback.acknowledgement)
+        kbz = PaymentCallback(
+            order_id="O1",
+            status=PaymentStatus.SUCCESSFUL,
+            gateway_status="PAY_SUCCESS",
+            acknowledgement=Acknowledgement(body="success"),
+        )
+        assert kbz.acknowledgement.body == "success"
         assert callback.raw == {}
         assert "PaymentCallback(order_id='O1', status='successful'" in repr(callback)
         pending = PaymentCallback(order_id="O1", status="pending", gateway_status="X")  # type: ignore[arg-type]
@@ -277,9 +285,9 @@ class TestInternals:
         parsed = parse_object('{"a": 1e3, "b": -0, "c": [1.0, true, null], "d": "x"}')
         assert parsed is not None
         assert to_plain(parsed) == {
-            "a": Decimal("1e3"),
-            "b": 0,
-            "c": [Decimal("1.0"), True, None],
+            "a": "1e3",
+            "b": "-0",
+            "c": ["1.0", True, None],
             "d": "x",
         }
         assert scalar_string(parsed["a"]) == "1e3"
@@ -291,7 +299,7 @@ class TestInternals:
         assert parse_object("{") is None
         assert parse_object("[" * 100000) is None
         digits = "9" * 5000
-        assert to_plain(JsonNumber(digits)) == Decimal(digits)
+        assert to_plain(JsonNumber(digits)) == digits
 
     def test_reads_scalars_as_signed_text(self) -> None:
         assert scalar_string(True) == "true"
@@ -306,10 +314,14 @@ class TestInternals:
     def test_escapes_like_go_query_escape(self) -> None:
         assert query_escape("a b&c=d~e*f'(g)!") == "a+b%26c%3Dd~e%2Af%27%28g%29%21"
 
-    def test_decodes_only_strict_base64(self) -> None:
+    def test_decodes_padded_or_unpadded_standard_base64_as_utf8(self) -> None:
         assert decode_base64("YWI=") == "ab"
-        for value in ("", "YWI", "YW I=", "YW==I", "A==="):
+        assert decode_base64("YWI") == "ab"
+        assert decode_base64("YQ") == "a"
+        assert decode_base64("YWJj") == "abc"
+        for value in ("", "Y", "YWI==", "YWJj=", "YQ=", "YW I=", "YW==I", "A===", "YW\nI=", "-_8="):
             assert decode_base64(value) is None
+        assert decode_base64("/w==") is None  # 0xFF is not UTF-8
 
     @pytest.mark.parametrize(
         ("value", "sandbox"),

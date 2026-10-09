@@ -143,7 +143,7 @@ class TestYomaMmqr:
         assert cache.ttls == [ttl]
         assert list(cache.items.values()) == ["T"]
         key = next(iter(cache.items))
-        assert key.startswith("python-myanmar-payments.yoma-mmqr.token.")
+        assert key.startswith("myanmar-payments.yoma-mmqr.token.")
 
     def test_shares_a_cache_between_gateways(self) -> None:
         cache = MemoryTokenCache()

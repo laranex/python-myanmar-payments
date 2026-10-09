@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from ._amount import AmountInput, to_amount
 from ._callback import CallbackRequest, lossless_input
@@ -15,6 +15,7 @@ from ._results import FormField, FormPayment, PaymentCallback
 from ._status import PaymentStatus, _StrEnum, resolve_status
 from ._support import (
     EnvSource,
+    config_of,
     default_env,
     env_first,
     env_sandbox,
@@ -23,6 +24,7 @@ from ._support import (
     random_hex,
     require_setting,
     safe_equal,
+    sandbox_flag,
     trim_url,
     utc_now,
 )
@@ -60,16 +62,16 @@ class CyberSourceConfig:
     def __init__(
         self,
         *,
-        profile_id: str,
-        access_key: str,
-        secret_key: str,
-        sandbox: bool = True,
+        profile_id: str = "",
+        access_key: str = "",
+        secret_key: str = "",
+        sandbox: bool | str = True,
         base_url: str | None = None,
     ) -> None:
         self.profile_id = require_setting("cyber_source", "profile_id", profile_id)
         self.access_key = require_setting("cyber_source", "access_key", access_key)
         self.secret_key = require_setting("cyber_source", "secret_key", secret_key)
-        self.sandbox = sandbox
+        self.sandbox = sandbox = sandbox_flag(sandbox)
         self.base_url = trim_url(
             optional_setting(base_url) or (self.SANDBOX_URL if sandbox else self.PRODUCTION_URL)
         )
@@ -175,8 +177,8 @@ class CyberSource:
     config: CyberSourceConfig
     """The configuration in use."""
 
-    def __init__(self, config: CyberSourceConfig) -> None:
-        self.config = config
+    def __init__(self, config: CyberSourceConfig | Mapping[str, Any]) -> None:
+        self.config = config_of(CyberSourceConfig, config)
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> CyberSource:

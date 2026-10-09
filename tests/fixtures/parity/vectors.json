@@ -1,0 +1,536 @@
+{
+    "source": "Cross-SDK parity vectors. php-, go-, node- and python-myanmar-payments ship this file unchanged and must give the same answer for every case.",
+    "secrets": {
+        "kbz_pay_app_key": "test-key",
+        "wave_money_secret_key": "test-secret",
+        "aya_pay_app_secret": "test-secret",
+        "yoma_mmqr_webhook_hashkey": "test-hashkey",
+        "cyber_source_secret_key": "test-secret"
+    },
+    "callbacks": {
+        "kbz_pay": [
+            {
+                "name": "numbers sign as the exact text sent and null is left out",
+                "content_type": "application/json",
+                "body": "{\"Request\":{\"appid\":\"kp123\",\"merch_code\":\"100001\",\"merch_order_id\":\"ORDER_1\",\"mm_order_id\":\"MM1\",\"notify_time\":1536637503,\"total_amount\":1000.50,\"trade_status\":\"PAY_SUCCESS\",\"trans_currency\":\"MMK\",\"callback_info\":null,\"sign_type\":\"SHA256\",\"sign\":\"7E349C9F5FBD5310BEC3279B5BC82F322D6AF2146040D4C290F9DA0C47E98E17\"}}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "PAY_SUCCESS",
+                    "gateway_reference": "MM1",
+                    "amount": "1000.50"
+                }
+            },
+            {
+                "name": "booleans sign as true and false",
+                "content_type": "application/json",
+                "body": "{\"Request\":{\"appid\":\"kp123\",\"merch_code\":\"100001\",\"merch_order_id\":\"ORDER_1\",\"mm_order_id\":\"MM1\",\"notify_time\":\"1536637503\",\"total_amount\":\"1000.50\",\"trade_status\":\"PAY_SUCCESS\",\"trans_currency\":\"MMK\",\"paid\":true,\"sign_type\":\"SHA256\",\"sign\":\"FBCFCCB029A46826F739F31D46F3E57B478C38C8031F186626D5E8B64793DF30\"}}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "PAY_SUCCESS",
+                    "gateway_reference": "MM1",
+                    "amount": "1000.50"
+                }
+            },
+            {
+                "name": "a nested value is rejected",
+                "content_type": "application/json",
+                "body": "{\"Request\":{\"appid\":\"kp123\",\"merch_code\":\"100001\",\"merch_order_id\":\"ORDER_1\",\"mm_order_id\":\"MM1\",\"notify_time\":\"1536637503\",\"total_amount\":\"1000.50\",\"trade_status\":\"PAY_SUCCESS\",\"trans_currency\":\"MMK\",\"extra\":{\"note\":\"x\"},\"sign_type\":\"SHA256\",\"sign\":\"7E349C9F5FBD5310BEC3279B5BC82F322D6AF2146040D4C290F9DA0C47E98E17\"}}",
+                "expected": {
+                    "valid": false
+                }
+            },
+            {
+                "name": "a urlencoded body without the Request wrapper",
+                "content_type": "application/x-www-form-urlencoded",
+                "body": "appid=kp123&merch_code=100001&merch_order_id=ORDER_1&mm_order_id=MM1&notify_time=1536637503&total_amount=1000.50&trade_status=PAY_SUCCESS&trans_currency=MMK&sign_type=SHA256&sign=7E349C9F5FBD5310BEC3279B5BC82F322D6AF2146040D4C290F9DA0C47E98E17",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "PAY_SUCCESS",
+                    "gateway_reference": "MM1",
+                    "amount": "1000.50"
+                }
+            }
+        ],
+        "wave_money": [
+            {
+                "name": "numbers hash as the exact text sent and null as \"null\"",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"timeToLiveSeconds\":300,\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"amount\":1000.00,\"backendResultUrl\":\"https://shop.test/wave/callback\",\"merchantReferenceId\":\"ref-1\",\"initiatorMsisdn\":\"9791009039\",\"transactionId\":\"360\",\"paymentRequestId\":\"361\",\"requestTime\":null,\"hashValue\":\"ef4e4476e21c0e77382772ffc87eda031d7e84cf9b72cc0546dfc9b77ec6449a\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "PAYMENT_CONFIRMED",
+                    "gateway_reference": "360",
+                    "amount": "1000.00"
+                }
+            },
+            {
+                "name": "booleans hash as true and false; the hash is compared case-insensitively",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"timeToLiveSeconds\":\"300\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"amount\":\"1000\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"merchantReferenceId\":\"ref-1\",\"initiatorMsisdn\":\"9791009039\",\"transactionId\":\"360\",\"paymentRequestId\":\"361\",\"requestTime\":true,\"hashValue\":\"55AAFCBFD3DC8CC458789F49508232EC8C4E4DE32FED0BC92BC925E703DC3C85\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "PAYMENT_CONFIRMED",
+                    "gateway_reference": "360",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "a nested value in a hashed field is rejected",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"timeToLiveSeconds\":\"300\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"amount\":\"1000\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"merchantReferenceId\":\"ref-1\",\"initiatorMsisdn\":\"9791009039\",\"transactionId\":\"360\",\"paymentRequestId\":\"361\",\"requestTime\":{\"at\":\"now\"},\"hashValue\":\"c321c4eadb290408a3af6b7cc035fa384cb6b9e1a99d82e1d9e299935049258d\"}",
+                "expected": {
+                    "valid": false
+                }
+            },
+            {
+                "name": "a nested value outside the hashed fields is accepted",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"timeToLiveSeconds\":\"300\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"amount\":\"1000\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"merchantReferenceId\":\"ref-1\",\"initiatorMsisdn\":\"9791009039\",\"transactionId\":\"360\",\"paymentRequestId\":\"361\",\"additionalField1\":{\"note\":\"x\"},\"hashValue\":\"c321c4eadb290408a3af6b7cc035fa384cb6b9e1a99d82e1d9e299935049258d\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "PAYMENT_CONFIRMED",
+                    "gateway_reference": "360",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "an empty orderId falls back to merchantReferenceId",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"timeToLiveSeconds\":\"300\",\"merchantId\":\"merchant\",\"orderId\":\"\",\"amount\":\"1000\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"merchantReferenceId\":\"ref-1\",\"initiatorMsisdn\":\"9791009039\",\"transactionId\":\"360\",\"paymentRequestId\":\"361\",\"hashValue\":\"aa61633f8aad45202b02ecdcb95be51fc51fa445e71ed2f6356ce5427a65db98\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ref-1",
+                    "status": "successful",
+                    "gateway_status": "PAYMENT_CONFIRMED",
+                    "gateway_reference": "360",
+                    "amount": "1000"
+                }
+            }
+        ],
+        "aya_pay": [
+            {
+                "name": "padded base64 is accepted",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAifQ==\",\"checkSum\":\"469ed0c9b1179e36b526144fda4d9a8187d7877b160006440e8737e0011c4a49\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "00",
+                    "gateway_reference": "T1",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "base64 without padding is accepted",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAifQ\",\"checkSum\":\"469ed0c9b1179e36b526144fda4d9a8187d7877b160006440e8737e0011c4a49\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "00",
+                    "gateway_reference": "T1",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "partial padding is rejected",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAifQ=\",\"checkSum\":\"469ed0c9b1179e36b526144fda4d9a8187d7877b160006440e8737e0011c4a49\"}",
+                "expected": {
+                    "valid": false
+                }
+            },
+            {
+                "name": "the URL-safe alphabet is rejected",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAi-___\",\"checkSum\":\"469ed0c9b1179e36b526144fda4d9a8187d7877b160006440e8737e0011c4a49\"}",
+                "expected": {
+                    "valid": false
+                }
+            },
+            {
+                "name": "a line break inside the base64 is rejected",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJj\\naE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAifQ==\",\"checkSum\":\"469ed0c9b1179e36b526144fda4d9a8187d7877b160006440e8737e0011c4a49\"}",
+                "expected": {
+                    "valid": false
+                }
+            },
+            {
+                "name": "an uppercase checksum is accepted",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAifQ==\",\"checkSum\":\"469ED0C9B1179E36B526144FDA4D9A8187D7877B160006440E8737E0011C4A49\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "00",
+                    "gateway_reference": "T1",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "a \"+\" that arrived as a space is read back as \"+\"",
+                "content_type": "application/x-www-form-urlencoded",
+                "body": "payload=eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEwMD8+IiwiZGF0ZVRpbWUiOiIyMDI2LTEwLTA3IDEwOjAwOjAwIn0=&checkSum=6bbc84772d160528570a662e78022a388117fc137cc6a70a91dca9f7778082a2",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "00",
+                    "gateway_reference": "T1",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "numbers and booleans sign as their text",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOjEwMDAsImN1cnJlbnlDb2RlIjoiMTA0Iiwic3RhdHVzQ29kZSI6IjAwIiwiZGVzY3JpcHRpb24iOiJPcmRlciAxIiwiZGF0ZVRpbWUiOiIyMDI2LTEwLTA3IDEwOjAwOjAwIiwicGFpZCI6dHJ1ZSwidXNlclJlZjEiOnRydWV9\",\"checkSum\":\"b5bbe85c4e22f6de0e36538c847676ff3ff7ed73034983dca4ee64094909d3b1\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "00",
+                    "gateway_reference": "T1",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "a nested value in a signed field is rejected",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAiLCJ1c2VyUmVmMSI6eyJjYXJ0Ijo5fX0=\",\"checkSum\":\"79942db8175e4792b75e1a538d91926b407fd12b05ffc44669b2a4f01495ad04\"}",
+                "expected": {
+                    "valid": false
+                }
+            },
+            {
+                "name": "a payload that is not UTF-8 is rejected",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwiZGVzY3JpcHRpb24iOiL/In0=\",\"checkSum\":\"0c4d5ccf303c2f367cbc7388a7c83a4b49df68d92151c78bd85a58590a238cf4\"}",
+                "expected": {
+                    "valid": false
+                }
+            }
+        ],
+        "yoma_mmqr": [
+            {
+                "name": "a numeric order number hashes as its exact text",
+                "content_type": "application/json",
+                "body": "{\"orderNumber\":12345,\"status\":\"SUCCESS\",\"hashValue\":\"a4985cb50866542d42675128ae92fee627643d55dd966fea6773cc66842d65e6\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "12345",
+                    "status": "successful",
+                    "gateway_status": "SUCCESS"
+                }
+            },
+            {
+                "name": "booleans hash as true and false",
+                "content_type": "application/json",
+                "body": "{\"orderNumber\":\"ORDER_1\",\"status\":true,\"hashValue\":\"628800464e075b27d6e3d0f9c39688cb0cbb15ab0c36911e55a3942c3e0b56e9\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "unknown",
+                    "gateway_status": "true"
+                }
+            },
+            {
+                "name": "a nested status is rejected",
+                "content_type": "application/json",
+                "body": "{\"orderNumber\":\"ORDER_1\",\"status\":{\"code\":\"SUCCESS\"},\"hashValue\":\"05a1f216fd163fda83bbbc18e7cd6e0ce7662d10aface9c17e066ecdfa01b6db\"}",
+                "expected": {
+                    "valid": false
+                }
+            },
+            {
+                "name": "a lowercase status maps case-insensitively",
+                "content_type": "application/json",
+                "body": "{\"orderNumber\":\"ORDER_1\",\"status\":\"success\",\"hashValue\":\"FC69235A82B7EC767D2B4236D475FA02EDC421B19A8B78A0A2D1B8CED586C1F0\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "success"
+                }
+            }
+        ],
+        "cyber_source": [
+            {
+                "name": "a signed form post",
+                "content_type": "application/x-www-form-urlencoded",
+                "body": "decision=ACCEPT&req_reference_number=ORDER_1&transaction_id=7000&auth_amount=1000.00&signed_field_names=decision%2Creq_reference_number%2Ctransaction_id%2Cauth_amount%2Csigned_field_names&signature=vnEt8qNxgq7C8CdfxIvH7cYP62vhE7vsw8szQSrnok0%3D",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "ACCEPT",
+                    "gateway_reference": "7000",
+                    "amount": "1000.00"
+                }
+            },
+            {
+                "name": "a repeated field keeps its first value",
+                "content_type": "application/x-www-form-urlencoded",
+                "body": "decision=ACCEPT&req_reference_number=ORDER_1&transaction_id=7000&auth_amount=1000.00&signed_field_names=decision%2Creq_reference_number%2Ctransaction_id%2Cauth_amount%2Csigned_field_names&signature=vnEt8qNxgq7C8CdfxIvH7cYP62vhE7vsw8szQSrnok0%3D&decision=DECLINE",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "ACCEPT",
+                    "gateway_reference": "7000",
+                    "amount": "1000.00"
+                }
+            },
+            {
+                "name": "JSON numbers and booleans sign as their text",
+                "content_type": "application/json",
+                "body": "{\"decision\":\"ACCEPT\",\"req_reference_number\":\"ORDER_1\",\"transaction_id\":\"7000\",\"auth_amount\":1000.00,\"paid\":true,\"signed_field_names\":\"decision,req_reference_number,transaction_id,auth_amount,paid,signed_field_names\",\"signature\":\"7gWNWRJquq1mAYlnLfa65QywHODfJIE7EbzTyFvEeb0=\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "ACCEPT",
+                    "gateway_reference": "7000",
+                    "amount": "1000.00"
+                }
+            },
+            {
+                "name": "a nested signed field is rejected",
+                "content_type": "application/json",
+                "body": "{\"decision\":\"ACCEPT\",\"req_reference_number\":\"ORDER_1\",\"note\":{\"a\":\"b\"},\"signed_field_names\":\"decision,req_reference_number,note,signed_field_names\",\"signature\":\"NbAyxg5BJa/ozb29BXn+6PRUPJKA/etsc5PjwX7GfFc=\"}",
+                "expected": {
+                    "valid": false
+                }
+            }
+        ]
+    },
+    "amount_parse": [
+        {
+            "input": "1000",
+            "value": "1000"
+        },
+        {
+            "input": "1000.50",
+            "value": "1000.50"
+        },
+        {
+            "input": "007.50",
+            "value": "7.50"
+        },
+        {
+            "input": "000",
+            "value": "0"
+        },
+        {
+            "input": "0.00",
+            "value": "0.00"
+        },
+        {
+            "input": "1,000",
+            "value": null
+        },
+        {
+            "input": "-1",
+            "value": null
+        },
+        {
+            "input": "+1",
+            "value": null
+        },
+        {
+            "input": "1e3",
+            "value": null
+        },
+        {
+            "input": " 1000",
+            "value": null
+        },
+        {
+            "input": "1000.",
+            "value": null
+        },
+        {
+            "input": ".50",
+            "value": null
+        },
+        {
+            "input": "",
+            "value": null
+        },
+        {
+            "input": "١٠٠٠",
+            "value": null
+        }
+    ],
+    "amount_parse_error": {
+        "input": "1,000",
+        "errors": {
+            "amount": "The amount field must be a number such as 1000 or 1000.50, got \"1,000\"."
+        }
+    },
+    "amount_equals": [
+        {
+            "amount": "1000",
+            "other": "1000",
+            "equal": true
+        },
+        {
+            "amount": "1000",
+            "other": "1000.00",
+            "equal": true
+        },
+        {
+            "amount": "1000.50",
+            "other": "1000.5",
+            "equal": true
+        },
+        {
+            "amount": "1000",
+            "other": "01000",
+            "equal": true
+        },
+        {
+            "amount": "0",
+            "other": "0.00",
+            "equal": true
+        },
+        {
+            "amount": "1000",
+            "other": "1000.01",
+            "equal": false
+        },
+        {
+            "amount": "1000",
+            "other": "100",
+            "equal": false
+        },
+        {
+            "amount": "1000",
+            "other": "1,000",
+            "equal": false
+        },
+        {
+            "amount": "1000",
+            "other": " 1000",
+            "equal": false
+        },
+        {
+            "amount": "1000",
+            "other": "",
+            "equal": false
+        },
+        {
+            "amount": "1000",
+            "other": null,
+            "equal": false
+        }
+    ],
+    "sandbox": [
+        {
+            "value": "",
+            "sandbox": true
+        },
+        {
+            "value": "true",
+            "sandbox": true
+        },
+        {
+            "value": "1",
+            "sandbox": true
+        },
+        {
+            "value": "yes",
+            "sandbox": true
+        },
+        {
+            "value": "on",
+            "sandbox": true
+        },
+        {
+            "value": "anything",
+            "sandbox": true
+        },
+        {
+            "value": "false",
+            "sandbox": false
+        },
+        {
+            "value": "FALSE",
+            "sandbox": false
+        },
+        {
+            "value": " false ",
+            "sandbox": false
+        },
+        {
+            "value": "0",
+            "sandbox": false
+        },
+        {
+            "value": "f",
+            "sandbox": false
+        },
+        {
+            "value": "no",
+            "sandbox": false
+        },
+        {
+            "value": "Off",
+            "sandbox": false
+        }
+    ],
+    "yoma_mmqr_token_cache_key": {
+        "base_url": "https://devapi.yomabank.net",
+        "client_id": "client",
+        "key": "myanmar-payments.yoma-mmqr.token.4a65ec308ec1dc8e0b9d07b290452cbb708185e097f6cf82e10887fe969846f6"
+    },
+    "form_html": {
+        "order_id": "ORDER_1",
+        "action": "https://pay.test/?a=\"b\"&c='d'",
+        "fields": [
+            [
+                "name",
+                "<x>"
+            ],
+            [
+                "note",
+                "\"quoted\" & 'single'"
+            ]
+        ],
+        "enctype": "multipart/form-data",
+        "html": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Redirecting to payment</title></head><body><form id=\"payment-form\" method=\"POST\" action=\"https://pay.test/?a=&#34;b&#34;&amp;c=&#39;d&#39;\" enctype=\"multipart/form-data\"><input type=\"hidden\" name=\"name\" value=\"&lt;x&gt;\"><input type=\"hidden\" name=\"note\" value=\"&#34;quoted&#34; &amp; &#39;single&#39;\"><noscript><button type=\"submit\">Continue to payment</button></noscript></form><script>document.getElementById(\"payment-form\").submit();</script></body></html>"
+    },
+    "messages": {
+        "invalid_payment_data": {
+            "errors": {
+                "orderId": "The orderId field is required.",
+                "amount": "The amount field must be greater than 0."
+            },
+            "message": "Invalid payment data: The amount field must be greater than 0. The orderId field is required."
+        },
+        "configuration": {
+            "gateway": "kbz_pay",
+            "key": "app_id",
+            "message": "The kbz_pay configuration is missing [app_id]."
+        },
+        "whole_amounts_only": "Wave Money does not accept decimal amounts; the amount field must be a whole number.",
+        "aya_whole_amounts_only": "AYA Payment Gateway does not accept decimal amounts; the amount field must be a whole number.",
+        "kbz_decimals": "KBZ Pay accepts at most 2 decimal places; the amount field has 3.",
+        "kbz_timeout_zero": "The timeoutMinutes field must be between 1 and 120."
+    }
+}
