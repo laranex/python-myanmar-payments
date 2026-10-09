@@ -1,0 +1,20 @@
+{
+    "source": "KBZ Pay UAT docs, signature rules example",
+    "fields": {
+        "timestamp": "1536637503",
+        "notify_url": "http://test.com/payment/notify",
+        "method": "kbz.payment.precreate",
+        "nonce_str": "845255910308564481",
+        "sign_type": "SHA256",
+        "sign": "ignored",
+        "version": "1.0",
+        "appid": "kp1234567890987654321aabbccddeef",
+        "merch_code": "100001",
+        "merch_order_id": "201811212009001",
+        "trade_type": "APPH5",
+        "total_amount": "1000",
+        "trans_currency": "MMK",
+        "title": ""
+    },
+    "expected": "appid=kp1234567890987654321aabbccddeef&merch_code=100001&merch_order_id=201811212009001&method=kbz.payment.precreate&nonce_str=845255910308564481&notify_url=http://test.com/payment/notify&timestamp=1536637503&total_amount=1000&trade_type=APPH5&trans_currency=MMK&version=1.0"
+}

@@ -1,0 +1,26 @@
+{
+    "source": "APG Integration Guide v1.4, callback payload fields in documented order (note the gateway's `currenyCode` spelling)",
+    "app_secret": "test-secret",
+    "checksum_string": "ORD123456:TRN0001:1000:104:00:::::::REF01:cart-9:::::Order 123456:2026-10-07 10:00:00",
+    "payload": {
+        "merchOrderId": "ORD123456",
+        "tranId": "TRN0001",
+        "amount": "1000",
+        "currenyCode": "104",
+        "statusCode": "00",
+        "paymentCardNumber": null,
+        "paymentMobileNumber": null,
+        "cardTypeName": null,
+        "cardExpiryDate": null,
+        "nameOnCard": null,
+        "approvalCode": null,
+        "tranRef": "REF01",
+        "userRef1": "cart-9",
+        "userRef2": "",
+        "userRef3": "",
+        "userRef4": "",
+        "userRef5": "",
+        "description": "Order 123456",
+        "dateTime": "2026-10-07 10:00:00"
+    }
+}

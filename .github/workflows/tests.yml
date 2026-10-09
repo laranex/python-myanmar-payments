@@ -1,0 +1,86 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+  release:
+    types: [published]
+  pull_request:
+  workflow_dispatch:
+  # release.yml runs the suite before publishing a tag.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        dependencies: [highest]
+        include:
+          - os: windows-latest
+            python: '3.14'
+            dependencies: highest
+          # Proves the dependency floors (httpx>=0.25 and the dev tools).
+          - os: ubuntu-latest
+            python: '3.10'
+            dependencies: lowest
+
+    name: Python ${{ matrix.python }} - ${{ matrix.dependencies }} - ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        env:
+          PYTHON: ${{ matrix.python }}
+          DEPENDENCIES: ${{ matrix.dependencies }}
+        run: |
+          if [[ "$DEPENDENCIES" == lowest ]]; then
+            uv venv --python "$PYTHON"
+            uv pip install --resolution lowest-direct --editable . --group dev
+          else
+            uv sync --locked --python "$PYTHON"
+          fi
+
+      - name: Lint
+        if: matrix.dependencies == 'highest'
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+
+      - name: Typecheck
+        if: matrix.dependencies == 'highest'
+        run: uv run --no-sync mypy
+
+      - name: Test
+        run: uv run --no-sync pytest --cov
+
+      - name: Build
+        run: uv build
+
+      - name: Test the built wheel
+        run: |
+          uv run --isolated --no-project --python "${{ matrix.python }}" --with dist/*.whl \
+            python -c "import python_myanmar_payments as p; print(p.__version__, p.KbzPay, p.AsyncKbzPay)"
