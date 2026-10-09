@@ -1,0 +1,163 @@
+name: release
+
+# Pushing a version tag (v4.0.0, v4.0.0-alpha.1, ...) releases the package: the test
+# suite runs, the package is published to PyPI through trusted publishing (OIDC, no
+# token), and the GitHub release is created from the matching CHANGELOG.md section.
+# Tags map to PEP 440 versions: v4.0.0-alpha.1 -> 4.0.0a1, v4.0.0-beta.2 -> 4.0.0b2,
+# v4.0.0-rc.1 -> 4.0.0rc1, v4.0.0 -> 4.0.0. The mapped version must equal
+# __version__ in src/python_myanmar_payments/_version.py.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate the tag
+        id: tag
+        run: |
+          pattern='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$'
+          if [[ ! "$GITHUB_REF_NAME" =~ $pattern ]]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' is not vMAJOR.MINOR.PATCH with an optional -alpha.N, -beta.N or -rc.N suffix."
+            exit 1
+          fi
+
+          version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          prerelease=false
+          case "${BASH_REMATCH[5]}" in
+            alpha) version="${version}a${BASH_REMATCH[6]}"; prerelease=true ;;
+            beta) version="${version}b${BASH_REMATCH[6]}"; prerelease=true ;;
+            rc) version="${version}rc${BASH_REMATCH[6]}"; prerelease=true ;;
+          esac
+
+          package="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/python_myanmar_payments/_version.py)"
+          if [[ "$package" != "$version" ]]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' maps to version $version, but _version.py has '$package': set __version__ = \"$version\" or tag the commit that has it."
+            exit 1
+          fi
+
+          {
+            echo "version=$version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $GITHUB_REF_NAME as $version (prerelease: $prerelease)"
+
+  tests:
+    name: Tests
+    uses: ./.github/workflows/tests.yml
+
+  build:
+    name: Build
+    needs: [validate, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build the sdist and wheel
+        run: uv build
+
+      - name: Check the built version
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          ls dist
+          test -f "dist/python_myanmar_payments-$VERSION-py3-none-any.whl"
+          test -f "dist/python_myanmar_payments-$VERSION.tar.gz"
+
+      - name: Upload the distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/python-myanmar-payments/${{ needs.validate.outputs.version }}/
+
+    permissions:
+      id-token: write # PyPI trusted publishing
+
+    steps:
+      - name: Download the distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+  release:
+    name: GitHub release
+    needs: [validate, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "The $GITHUB_REF_NAME release already exists; skipping."
+            exit 0
+          fi
+
+          # Release notes: the CHANGELOG.md section whose heading is "## v1.2.3" or
+          # "## v1.2.3 - <date>", up to the next "## " heading.
+          notes="$RUNNER_TEMP/release-notes.md"
+          if [[ -f CHANGELOG.md ]]; then
+            awk -v tag="$GITHUB_REF_NAME" -v version="$VERSION" '
+              /^## / { if (found) exit; found = ($2 == tag || $2 == version); next }
+              found { print }
+            ' CHANGELOG.md > "$notes"
+          fi
+
+          args=(--verify-tag --title "$GITHUB_REF_NAME")
+          if [[ -f "$notes" ]] && grep -q '[^[:space:]]' "$notes"; then
+            args+=(--notes-file "$notes")
+          else
+            echo "::warning::CHANGELOG.md has no '## $GITHUB_REF_NAME' section; using generated release notes."
+            args+=(--generate-notes)
+          fi
+          [[ "$PRERELEASE" == true ]] && args+=(--prerelease)
+
+          gh release create "$GITHUB_REF_NAME" "${args[@]}"

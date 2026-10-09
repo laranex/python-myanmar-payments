@@ -1,0 +1,26 @@
+{
+    "source": "WPPG documentation callback example, with the hash computed using secret_key below",
+    "secret_key": "test-secret",
+    "hash_string": "PAYMENT_CONFIRMED300testmerchantID1001000https://shop.test/wave/callbackref-0019791009039360360null",
+    "payload": {
+        "status": "PAYMENT_CONFIRMED",
+        "merchantId": "testmerchantID",
+        "orderId": "100",
+        "merchantReferenceId": "ref-001",
+        "frontendResultUrl": "https://shop.test/done",
+        "backendResultUrl": "https://shop.test/wave/callback",
+        "initiatorMsisdn": "9791009039",
+        "amount": "1000",
+        "timeToLiveSeconds": 300,
+        "paymentDescription": "Order 100",
+        "currency": "MMK",
+        "additionalField1": null,
+        "additionalField2": null,
+        "additionalField3": null,
+        "additionalField4": null,
+        "additionalField5": null,
+        "transactionId": "360",
+        "paymentRequestId": "360",
+        "requestTime": null
+    }
+}
