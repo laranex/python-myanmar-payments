@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from decimal import Decimal
 
@@ -70,7 +71,8 @@ class Amount:
         """
         if not isinstance(amount, str) or _PATTERN.fullmatch(amount) is None:
             raise _invalid(
-                f"The amount field must be a number such as 1000 or 1000.50, got {amount!r}."
+                "The amount field must be a number such as 1000 or 1000.50, "
+                f"got {json.dumps(amount, ensure_ascii=False, default=repr)}."
             )
         whole, dot, fraction = amount.partition(".")
         whole = whole.lstrip("0") or "0"
@@ -133,16 +135,19 @@ class Amount:
         return Decimal(self._value)
 
     def equals(self, other: Amount | str | None) -> bool:
-        """Whether both amounts have the same value, ignoring trailing fractional zeros.
+        """Whether both amounts have the same value.
 
-        ``1000``, ``1000.0`` and ``1000.00`` are equal. ``None`` is never equal,
-        so a gateway amount that was not sent never matches. Text is compared as
-        given, e.g. ``callback.amount``.
+        Leading zeros of the whole part and trailing zeros of the fraction are
+        ignored: ``1000``, ``01000`` and ``1000.00`` are equal. Text such as
+        ``callback.amount`` must be plain digits with an optional fraction;
+        anything else, and ``None``, is never equal, so a gateway amount that was
+        not sent never matches.
         """
-        if other is None:
+        if isinstance(other, Amount):
+            return self == other
+        if not isinstance(other, str) or _PATTERN.fullmatch(other) is None:
             return False
-        text = other._value if isinstance(other, Amount) else other
-        return _normalize(self._value) == _normalize(text)
+        return _normalize(self._value) == _normalize(other)
 
 
 AmountInput = Amount | int | str | Decimal
@@ -151,7 +156,10 @@ decimal text such as ``"1000.50"`` or a :class:`~decimal.Decimal`. Never a float
 
 
 def _normalize(value: str) -> str:
-    return value.rstrip("0").rstrip(".") if "." in value else value
+    whole, _, fraction = value.partition(".")
+    whole = whole.lstrip("0") or "0"
+    fraction = fraction.rstrip("0")
+    return f"{whole}.{fraction}" if fraction else whole
 
 
 def _invalid(message: str) -> InvalidPaymentDataError:

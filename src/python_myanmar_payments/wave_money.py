@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import httpx
 
@@ -24,6 +24,7 @@ from ._results import PaymentCallback, RedirectPayment
 from ._status import PaymentStatus, resolve_status
 from ._support import (
     EnvSource,
+    config_of,
     default_env,
     env_first,
     env_int,
@@ -34,10 +35,11 @@ from ._support import (
     random_hex,
     require_setting,
     safe_equal,
+    sandbox_flag,
     trim_url,
 )
 from ._validate import AmountRule, Validator
-from ._values import get, optional, scalar_string, trimmed
+from ._values import get, is_nested, optional, scalar_string, trimmed
 
 __all__ = [
     "AsyncWaveMoney",
@@ -78,11 +80,11 @@ class WaveMoneyConfig:
     def __init__(
         self,
         *,
-        merchant_id: str,
-        secret_key: str,
-        merchant_name: str,
+        merchant_id: str = "",
+        secret_key: str = "",
+        merchant_name: str = "",
         time_to_live_seconds: int | None = None,
-        sandbox: bool = True,
+        sandbox: bool | str = True,
         base_url: str | None = None,
         authenticate_url: str | None = None,
     ) -> None:
@@ -94,7 +96,7 @@ class WaveMoneyConfig:
         self.time_to_live_seconds = (
             ttl if valid and ttl is not None else self.DEFAULT_TIME_TO_LIVE_SECONDS
         )
-        self.sandbox = sandbox
+        self.sandbox = sandbox = sandbox_flag(sandbox)
         self.base_url = trim_url(
             optional_setting(base_url) or (self.SANDBOX_URL if sandbox else self.PRODUCTION_URL)
         )
@@ -195,8 +197,8 @@ class _WaveMoneyBase:
     config: WaveMoneyConfig
     """The configuration in use."""
 
-    def __init__(self, config: WaveMoneyConfig) -> None:
-        self.config = config
+    def __init__(self, config: WaveMoneyConfig | Mapping[str, Any]) -> None:
+        self.config = config_of(WaveMoneyConfig, config)
 
     @staticmethod
     def resolved_amount(data: WaveMoneyPaymentData) -> Amount | None:
@@ -251,6 +253,7 @@ class _WaveMoneyBase:
         missing, null or empty, because Wave marks ``orderId`` as optional.
         """
         payload = lossless_body(request)
+        nested = any(is_nested(payload.get(name)) for name in _CALLBACK_FIELDS)
         parts = []
         for name in _CALLBACK_FIELDS:
             text = scalar_string(payload.get(name))
@@ -258,7 +261,11 @@ class _WaveMoneyBase:
         expected = self._hash(parts)
         hash_value = payload.get("hashValue")
 
-        if not isinstance(hash_value, str) or not safe_equal(expected, hash_value.lower()):
+        if (
+            nested
+            or not isinstance(hash_value, str)
+            or not safe_equal(expected, hash_value.lower())
+        ):
             raise SignatureVerificationError(
                 "Wave Money callback hash verification failed.", to_plain_object(payload)
             )
@@ -364,7 +371,7 @@ class WaveMoney(_WaveMoneyBase, SyncGateway):
 
     def __init__(
         self,
-        config: WaveMoneyConfig,
+        config: WaveMoneyConfig | Mapping[str, Any],
         *,
         http_client: httpx.Client | None = None,
         timeout: float | None = DEFAULT_TIMEOUT,
@@ -399,7 +406,7 @@ class AsyncWaveMoney(_WaveMoneyBase, AsyncGateway):
 
     def __init__(
         self,
-        config: WaveMoneyConfig,
+        config: WaveMoneyConfig | Mapping[str, Any],
         *,
         http_client: httpx.AsyncClient | None = None,
         timeout: float | None = DEFAULT_TIMEOUT,

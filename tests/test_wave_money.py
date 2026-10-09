@@ -176,8 +176,8 @@ class TestWaveMoney:
         assert callback.order_id == "100"
         assert callback.gateway_reference == "360"
         assert callback.amount == "1000"
-        assert callback.raw["timeToLiveSeconds"] == 300
-        assert callback.acknowledgement().body == ""
+        assert callback.raw["timeToLiveSeconds"] == "300"
+        assert callback.acknowledgement.body == ""
 
     def test_verifies_json_numbers_with_their_exact_text(self) -> None:
         vector = fixture("wave_money/callback.json")

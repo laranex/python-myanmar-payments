@@ -11,6 +11,7 @@ import secrets
 import time
 from collections.abc import Mapping
 from datetime import datetime, timezone
+from typing import Any, TypeVar
 from urllib.parse import quote_plus
 
 from ._errors import ConfigurationError
@@ -57,15 +58,28 @@ def query_escape(value: str) -> str:
     return quote_plus(value, safe="")
 
 
-_BASE64 = re.compile(r"[A-Za-z0-9+/]*={0,2}")
+_BASE64 = re.compile(r"[A-Za-z0-9+/]+={0,2}")
 
 
 def decode_base64(value: str) -> str | None:
-    """Decodes strict standard base64 (with padding), or ``None``."""
-    if value == "" or len(value) % 4 != 0 or _BASE64.fullmatch(value) is None:
+    """Decodes standard base64 as UTF-8 text, or ``None``.
+
+    The padding is either complete or left out entirely; partial padding, other
+    alphabets, whitespace and bytes that are not UTF-8 are rejected.
+    """
+    if _BASE64.fullmatch(value) is None:
         return None
-    # The pattern and length check leave only input b64decode accepts.
-    return base64.b64decode(value, validate=True).decode("utf-8", errors="replace")
+    if "=" in value:
+        if len(value) % 4 != 0:
+            return None
+    elif len(value) % 4 == 1:
+        return None
+    else:
+        value += "=" * (-len(value) % 4)
+    try:
+        return base64.b64decode(value, validate=True).decode("utf-8")
+    except ValueError:  # Invalid UTF-8 (UnicodeDecodeError is a ValueError).
+        return None
 
 
 # --- Time ----------------------------------------------------------------------
@@ -112,7 +126,24 @@ def env_sandbox(env: EnvSource, key: str) -> bool:
     Only ``false``, ``0``, ``f``, ``no`` and ``off`` (any case) select production;
     unset or unrecognized values mean sandbox.
     """
-    return (env.get(key) or "").strip().lower() not in _FALSE
+    return sandbox_flag(env.get(key) or "")
+
+
+def sandbox_flag(value: bool | str) -> bool:
+    """A ``sandbox`` setting: a bool, or text read like a ``*_SANDBOX`` variable."""
+    if isinstance(value, str):
+        return value.strip().lower() not in _FALSE
+    return bool(value)
+
+
+_C = TypeVar("_C")
+
+
+def config_of(config_class: type[_C], config: _C | Mapping[str, Any]) -> _C:
+    """``config`` itself, or a ``config_class`` built from a mapping of its arguments."""
+    if isinstance(config, config_class):
+        return config
+    return config_class(**config)  # type: ignore[arg-type]
 
 
 _INT = re.compile(r"[+-]?[0-9]+")

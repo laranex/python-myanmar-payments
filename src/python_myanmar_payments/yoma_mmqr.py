@@ -32,6 +32,7 @@ from ._results import PaymentCallback, PaymentStatusResult, QrPayment
 from ._status import PaymentStatus, resolve_status
 from ._support import (
     EnvSource,
+    config_of,
     default_env,
     env_first,
     env_sandbox,
@@ -39,12 +40,13 @@ from ._support import (
     optional_setting,
     require_setting,
     safe_equal,
+    sandbox_flag,
     sha256_hex,
     trim_url,
     utc_now,
 )
 from ._validate import AmountRule, Validator
-from ._values import get, optional, trimmed
+from ._values import get, is_nested, optional, trimmed
 
 __all__ = [
     "AsyncYomaMmqr",
@@ -85,12 +87,12 @@ class YomaMmqrConfig:
     def __init__(
         self,
         *,
-        merchant_id: str,
-        client_id: str,
-        client_secret: str,
-        webhook_hash_key: str,
+        merchant_id: str = "",
+        client_id: str = "",
+        client_secret: str = "",
+        webhook_hash_key: str = "",
         webhook_secret: str | None = None,
-        sandbox: bool = True,
+        sandbox: bool | str = True,
         base_url: str | None = None,
         api_version: str | None = None,
     ) -> None:
@@ -99,7 +101,7 @@ class YomaMmqrConfig:
         self.client_secret = require_setting("yoma_mmqr", "client_secret", client_secret)
         self.webhook_hash_key = require_setting("yoma_mmqr", "webhook_hashkey", webhook_hash_key)
         self.webhook_secret = optional_setting(webhook_secret)
-        self.sandbox = sandbox
+        self.sandbox = sandbox = sandbox_flag(sandbox)
         self.base_url = trim_url(
             optional_setting(base_url) or (self.SANDBOX_URL if sandbox else self.PRODUCTION_URL)
         )
@@ -176,8 +178,8 @@ class _YomaMmqrBase:
     config: YomaMmqrConfig
     """The configuration in use."""
 
-    def __init__(self, config: YomaMmqrConfig) -> None:
-        self.config = config
+    def __init__(self, config: YomaMmqrConfig | Mapping[str, Any]) -> None:
+        self.config = config_of(YomaMmqrConfig, config)
 
     @staticmethod
     def validate(data: YomaMmqrPaymentData) -> None:
@@ -217,7 +219,11 @@ class _YomaMmqrBase:
             order_number + self.config.webhook_hash_key,
             f"orderNumber={order_number}&status={status}",
         )
-        if order_number == "" or not safe_equal(expected, get(payload, "hashValue").lower()):
+        if (
+            order_number == ""
+            or is_nested(payload.get("status"))
+            or not safe_equal(expected, get(payload, "hashValue").lower())
+        ):
             raise SignatureVerificationError(
                 "Yoma MMQR callback hash verification failed.", to_plain_object(payload)
             )
@@ -326,7 +332,7 @@ class _YomaMmqrBase:
 
     def _token_cache_key(self) -> str:
         digest = sha256_hex(f"{self.config.base_url}|{self.config.client_id}")
-        return f"python-myanmar-payments.yoma-mmqr.token.{digest}"
+        return f"myanmar-payments.yoma-mmqr.token.{digest}"
 
 
 def _api_error(endpoint: str, status: int, body: LosslessObject, error_code: str) -> ApiError:
@@ -353,7 +359,7 @@ class YomaMmqr(_YomaMmqrBase, SyncGateway):
 
     def __init__(
         self,
-        config: YomaMmqrConfig,
+        config: YomaMmqrConfig | Mapping[str, Any],
         *,
         token_cache: TokenCache | None = None,
         http_client: httpx.Client | None = None,
@@ -442,7 +448,7 @@ class AsyncYomaMmqr(_YomaMmqrBase, AsyncGateway):
 
     def __init__(
         self,
-        config: YomaMmqrConfig,
+        config: YomaMmqrConfig | Mapping[str, Any],
         *,
         token_cache: AnyTokenCache | None = None,
         http_client: httpx.AsyncClient | None = None,

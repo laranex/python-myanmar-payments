@@ -33,7 +33,7 @@ kbz = payments.kbz_pay()  # also wave_money(), aya_pay(), yoma_mmqr(), cyber_sou
 ```
 
 - In async code use `AsyncMyanmarPayments.from_env()`; its `kbz_pay()` returns an `AsyncKbzPay`.
-- Or build one gateway: `KbzPay(KbzPayConfig(app_id=..., app_key=..., merchant_code=...))` or `KbzPay.from_env()`.
+- Or build one gateway: `KbzPay(KbzPayConfig(app_id=..., app_key=..., merchant_code=...))`, `KbzPay({"app_id": ..., "app_key": ..., "merchant_code": ...})` or `KbzPay.from_env()`. The facades take the same config objects or mappings (`MyanmarPayments(kbz_pay={...})`).
 - Options (keyword arguments): `http_client` (your own `httpx.Client` / `httpx.AsyncClient`) and `timeout` (seconds, default 30). Yoma and the facades also take `token_cache` (any `TokenCache`, default `MemoryTokenCache`; async code may pass an `AsyncTokenCache`; back it with Redis when you run several processes).
 - Close the HTTP clients the package created with `payments.close()` / `await payments.aclose()` or a `with` / `async with` block.
 - A missing credential raises `ConfigurationError` (`gateway`, `key`).
@@ -84,7 +84,7 @@ except SignatureVerificationError:
     return HttpResponse("invalid signature", status=400)
 if callback.is_successful():
     ...  # compare callback.amount with the order, then fulfill callback.order_id once
-ack = callback.acknowledgement()
+ack = callback.acknowledgement
 return HttpResponse(ack.body, status=ack.status, headers=ack.headers)
 ```
 

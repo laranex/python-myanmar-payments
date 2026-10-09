@@ -180,7 +180,7 @@ class PaymentCallback:
     """
 
     __slots__ = (
-        "_acknowledgement",
+        "acknowledgement",
         "amount",
         "gateway_reference",
         "gateway_status",
@@ -201,6 +201,8 @@ class PaymentCallback:
     """The amount the gateway reports, exactly as it sent it, when it sends one."""
     raw: Mapping[str, Any]
     """The verified payload."""
+    acknowledgement: Acknowledgement
+    """The response to send so the gateway stops retrying."""
 
     def __init__(
         self,
@@ -219,15 +221,11 @@ class PaymentCallback:
         self.gateway_reference = gateway_reference
         self.amount = amount
         self.raw = raw if raw is not None else {}
-        self._acknowledgement = acknowledgement or Acknowledgement.default()
+        self.acknowledgement = acknowledgement or Acknowledgement.default()
 
     def is_successful(self) -> bool:
         """Whether the customer paid."""
         return self.status is PaymentStatus.SUCCESSFUL
-
-    def acknowledgement(self) -> Acknowledgement:
-        """The response to send so the gateway stops retrying."""
-        return self._acknowledgement
 
     def __repr__(self) -> str:
         return (

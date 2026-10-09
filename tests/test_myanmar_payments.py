@@ -97,6 +97,39 @@ class TestMyanmarPayments:
         assert not client.is_closed
         client.close()
 
+    def test_takes_mappings_of_config_arguments(self) -> None:
+        payments = MyanmarPayments(
+            kbz_pay={"app_id": "a", "app_key": "b", "merchant_code": "c", "sandbox": "false"},
+            wave_money={"merchant_id": "m", "secret_key": "s", "merchant_name": "n"},
+            aya_pay={"app_key": "k", "app_secret": "s"},
+            yoma_mmqr={
+                "merchant_id": "m",
+                "client_id": "c",
+                "client_secret": "s",
+                "webhook_hash_key": "h",
+            },
+            cyber_source={"profile_id": "p", "access_key": "a", "secret_key": "s"},
+        )
+        assert payments.kbz_pay().config.app_id == "a"
+        assert payments.kbz_pay().config.sandbox is False
+        assert payments.wave_money().config.merchant_name == "n"
+        assert payments.aya_pay().config.app_key == "k"
+        assert payments.yoma_mmqr().config.webhook_hash_key == "h"
+        assert payments.cyber_source().config.profile_id == "p"
+        payments.close()
+        with pytest.raises(ConfigurationError) as info:
+            MyanmarPayments(kbz_pay={"app_id": "a"}).kbz_pay()
+        assert info.value.key == "app_key"
+        with pytest.raises(TypeError):
+            MyanmarPayments(kbz_pay={"unknown": "x"}).kbz_pay()
+
+    def test_gateways_take_a_mapping_of_config_arguments(self) -> None:
+        config = {"app_id": "a", "app_key": "b", "merchant_code": "c"}
+        for gateway in (KbzPay(config), AsyncKbzPay(config)):
+            assert isinstance(gateway.config, KbzPayConfig)
+            assert gateway.config.merchant_code == "c"
+        assert CyberSource({"profile_id": "p", "access_key": "a", "secret_key": "s"}).config.sandbox
+
     @pytest.mark.parametrize(
         ("method", "gateway", "key"),
         [
@@ -127,6 +160,9 @@ class TestAsyncMyanmarPayments:
                 assert isinstance(payments.yoma_mmqr(), AsyncYomaMmqr)
                 assert payments.yoma_mmqr() is payments.yoma_mmqr()
                 assert isinstance(payments.cyber_source(), CyberSource)
+            mapped = AsyncMyanmarPayments(aya_pay={"app_key": "k", "app_secret": "s"})
+            assert mapped.aya_pay().config.app_secret == "s"
+            await mapped.aclose()
             empty = AsyncMyanmarPayments()
             await empty.aclose()
 

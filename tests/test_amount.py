@@ -100,6 +100,26 @@ class TestAmount:
         assert not Amount.kyat(10).equals(None)
         assert Amount.kyat(100).equals("100")
 
+    def test_compares_by_value_ignoring_leading_zeros(self) -> None:
+        assert Amount.kyat(1000) == Amount.parse("01000.000")
+        assert hash(Amount.kyat(1000)) == hash(Amount.parse("001000.00"))
+        assert Amount.kyat(1000).equals("01000")
+        assert Amount.kyat(0).equals("000.00")
+        assert Amount.parse("0.50").equals("00.5")
+        for text in ("1,000", " 1000", "1000 ", "", "+1000", "1e3", "\u0661\u0660\u0660\u0660"):
+            assert not Amount.kyat(1000).equals(text)
+        assert not Amount.kyat(1000).equals(1000)  # type: ignore[arg-type]
+
+    def test_quotes_the_rejected_text_in_the_parse_error(self) -> None:
+        with pytest.raises(InvalidPaymentDataError) as info:
+            Amount.parse("1,000")
+        assert info.value.errors["amount"] == (
+            'The amount field must be a number such as 1000 or 1000.50, got "1,000".'
+        )
+        with pytest.raises(InvalidPaymentDataError) as info:
+            Amount.parse(1000)  # type: ignore[arg-type]
+        assert info.value.errors["amount"].endswith("got 1000.")
+
     def test_is_immutable(self) -> None:
         amount = Amount.kyat(1)
         with pytest.raises(AttributeError):

@@ -99,7 +99,7 @@ class CallbackRequest:
     def parsed_body(self) -> dict[str, Any]:
         """The body decoded as JSON or as a urlencoded form.
 
-        JSON numbers become ``int`` or an exact :class:`~decimal.Decimal`.
+        JSON numbers keep their exact text as strings, e.g. ``"1000.50"``.
         """
         return to_plain_object(lossless_body(self))
 

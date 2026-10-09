@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from decimal import Decimal
 from typing import Any, Union
 
 __all__ = [
@@ -70,11 +69,11 @@ def parse_object(text: str) -> LosslessObject | None:
 def to_plain(value: LosslessValue) -> Any:
     """Converts a lossless value to plain Python values for the ``raw`` of results.
 
-    Integers become ``int`` and other numbers an exact :class:`~decimal.Decimal`,
+    Numbers become their exact text as a ``str`` (``1000.50`` stays ``"1000.50"``),
     never a float.
     """
     if isinstance(value, JsonNumber):
-        return _number(value.text)
+        return value.text
     if isinstance(value, list):
         return [to_plain(item) for item in value]
     if isinstance(value, dict):
@@ -85,15 +84,6 @@ def to_plain(value: LosslessValue) -> Any:
 def to_plain_object(value: LosslessObject) -> dict[str, Any]:
     """Converts a lossless object to plain Python values."""
     return {key: to_plain(item) for key, item in value.items()}
-
-
-def _number(text: str) -> int | Decimal:
-    if any(char in text for char in ".eE"):
-        return Decimal(text)
-    try:
-        return int(text)
-    except ValueError:  # Beyond Python's int string conversion limit.
-        return Decimal(text)
 
 
 def dumps(value: Any) -> str:
