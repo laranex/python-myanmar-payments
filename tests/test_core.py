@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from decimal import Decimal
+from importlib.metadata import version
 from typing import Any
 
 import httpx
@@ -482,4 +484,5 @@ class TestHttpClients:
 
 
 def test_exposes_the_version() -> None:
-    assert __version__ == "4.0.0a1"
+    assert re.fullmatch(r"\d+\.\d+\.\d+((a|b|rc)\d+)?", __version__)
+    assert __version__ == version("python-myanmar-payments")
