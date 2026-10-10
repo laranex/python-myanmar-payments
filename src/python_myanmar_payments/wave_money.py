@@ -12,7 +12,6 @@ from ._amount import Amount, AmountInput, to_amount
 from ._callback import CallbackRequest, lossless_body
 from ._errors import ApiError, SignatureVerificationError
 from ._http import (
-    DEFAULT_TIMEOUT,
     AsyncGateway,
     GatewayResponse,
     HttpRequest,
@@ -27,15 +26,13 @@ from ._support import (
     config_of,
     default_env,
     env_first,
-    env_int,
-    env_sandbox,
     hmac_sha256_hex,
     optional_setting,
     query_escape,
     random_hex,
+    require_seconds,
     require_setting,
     safe_equal,
-    sandbox_flag,
     trim_url,
 )
 from ._validate import AmountRule, Validator
@@ -53,14 +50,13 @@ __all__ = [
 class WaveMoneyConfig:
     """Wave Money credentials and endpoints.
 
-    A missing credential raises a :class:`~python_myanmar_payments.ConfigurationError`.
+    Every setting except the URL overrides is required; a missing one raises a
+    :class:`~python_myanmar_payments.ConfigurationError`. The URLs default to
+    production.
     """
 
-    SANDBOX_URL: ClassVar[str] = "https://preprodpayments.wavemoney.io:8107"
     PRODUCTION_URL: ClassVar[str] = "https://payments.wavemoney.io"
-    SANDBOX_AUTHENTICATE_URL: ClassVar[str] = "https://preprodpayments.wavemoney.io"
     PRODUCTION_AUTHENTICATE_URL: ClassVar[str] = "https://payments.wavemoney.io"
-    DEFAULT_TIME_TO_LIVE_SECONDS: ClassVar[int] = 300
 
     merchant_id: str
     """The merchant ID Wave issued."""
@@ -70,8 +66,8 @@ class WaveMoneyConfig:
     """Your business name, shown on Wave's payment page."""
     time_to_live_seconds: int
     """Seconds the customer has to pay."""
-    sandbox: bool
-    """Whether the test environment is used."""
+    timeout_seconds: int
+    """Seconds before the default HTTP client gives up on a request."""
     base_url: str
     """The API base URL in use."""
     authenticate_url: str
@@ -83,26 +79,21 @@ class WaveMoneyConfig:
         merchant_id: str = "",
         secret_key: str = "",
         merchant_name: str = "",
-        time_to_live_seconds: int | None = None,
-        sandbox: bool | str = True,
+        time_to_live_seconds: int | str | None = None,
+        timeout_seconds: int | str | None = None,
         base_url: str | None = None,
         authenticate_url: str | None = None,
     ) -> None:
         self.merchant_id = require_setting("wave_money", "merchant_id", merchant_id)
         self.secret_key = require_setting("wave_money", "secret_key", secret_key)
         self.merchant_name = require_setting("wave_money", "merchant_name", merchant_name)
-        ttl = time_to_live_seconds
-        valid = isinstance(ttl, int) and not isinstance(ttl, bool) and ttl > 0
-        self.time_to_live_seconds = (
-            ttl if valid and ttl is not None else self.DEFAULT_TIME_TO_LIVE_SECONDS
+        self.time_to_live_seconds = require_seconds(
+            "wave_money", "time_to_live_in_seconds", time_to_live_seconds
         )
-        self.sandbox = sandbox = sandbox_flag(sandbox)
-        self.base_url = trim_url(
-            optional_setting(base_url) or (self.SANDBOX_URL if sandbox else self.PRODUCTION_URL)
-        )
+        self.timeout_seconds = require_seconds("wave_money", "timeout_in_seconds", timeout_seconds)
+        self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
         self.authenticate_url = trim_url(
-            optional_setting(authenticate_url)
-            or (self.SANDBOX_AUTHENTICATE_URL if sandbox else self.PRODUCTION_AUTHENTICATE_URL)
+            optional_setting(authenticate_url) or self.PRODUCTION_AUTHENTICATE_URL
         )
 
     @classmethod
@@ -110,24 +101,23 @@ class WaveMoneyConfig:
         """Reads the ``WAVE_MONEY_*`` environment variables.
 
         ``WAVE_MONEY_MERCHANT_ID``, ``WAVE_MONEY_SECRET_KEY``,
-        ``WAVE_MONEY_MERCHANT_NAME`` (falling back to ``APP_NAME``),
-        ``WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS``, ``WAVE_MONEY_SANDBOX``,
-        ``WAVE_MONEY_BASE_URL`` and ``WAVE_MONEY_AUTHENTICATE_URL``. Defaults to
-        ``os.environ``.
+        ``WAVE_MONEY_MERCHANT_NAME``, ``WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS``,
+        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``, ``WAVE_MONEY_BASE_URL`` and
+        ``WAVE_MONEY_AUTHENTICATE_URL``. Defaults to ``os.environ``.
         """
         env = default_env() if env is None else env
         return cls(
             merchant_id=env_first(env, "WAVE_MONEY_MERCHANT_ID"),
             secret_key=env_first(env, "WAVE_MONEY_SECRET_KEY"),
-            merchant_name=env_first(env, "WAVE_MONEY_MERCHANT_NAME", "APP_NAME"),
-            time_to_live_seconds=env_int(env, "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS"),
-            sandbox=env_sandbox(env, "WAVE_MONEY_SANDBOX"),
+            merchant_name=env_first(env, "WAVE_MONEY_MERCHANT_NAME"),
+            time_to_live_seconds=env_first(env, "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS"),
+            timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
             base_url=env_first(env, "WAVE_MONEY_BASE_URL"),
             authenticate_url=env_first(env, "WAVE_MONEY_AUTHENTICATE_URL"),
         )
 
     def __repr__(self) -> str:
-        return f"WaveMoneyConfig(merchant_id={self.merchant_id!r}, sandbox={self.sandbox!r})"
+        return f"WaveMoneyConfig(merchant_id={self.merchant_id!r})"
 
 
 @dataclass(frozen=True)
@@ -374,10 +364,9 @@ class WaveMoney(_WaveMoneyBase, SyncGateway):
         config: WaveMoneyConfig | Mapping[str, Any],
         *,
         http_client: httpx.Client | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> None:
         super().__init__(config)
-        self._init_transport(http_client, timeout)
+        self._init_transport(http_client, self.config.timeout_seconds)
 
     @classmethod
     def from_env(
@@ -385,10 +374,9 @@ class WaveMoney(_WaveMoneyBase, SyncGateway):
         env: EnvSource | None = None,
         *,
         http_client: httpx.Client | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> WaveMoney:
         """A gateway configured from the ``WAVE_MONEY_*`` environment variables."""
-        return cls(WaveMoneyConfig.from_env(env), http_client=http_client, timeout=timeout)
+        return cls(WaveMoneyConfig.from_env(env), http_client=http_client)
 
     def initiate(self, data: WaveMoneyPaymentData) -> RedirectPayment:
         """Creates a payment request and returns Wave's page to redirect the customer to.
@@ -409,10 +397,9 @@ class AsyncWaveMoney(_WaveMoneyBase, AsyncGateway):
         config: WaveMoneyConfig | Mapping[str, Any],
         *,
         http_client: httpx.AsyncClient | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> None:
         super().__init__(config)
-        self._init_transport(http_client, timeout)
+        self._init_transport(http_client, self.config.timeout_seconds)
 
     @classmethod
     def from_env(
@@ -420,10 +407,9 @@ class AsyncWaveMoney(_WaveMoneyBase, AsyncGateway):
         env: EnvSource | None = None,
         *,
         http_client: httpx.AsyncClient | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> AsyncWaveMoney:
         """A gateway configured from the ``WAVE_MONEY_*`` environment variables."""
-        return cls(WaveMoneyConfig.from_env(env), http_client=http_client, timeout=timeout)
+        return cls(WaveMoneyConfig.from_env(env), http_client=http_client)
 
     async def initiate(self, data: WaveMoneyPaymentData) -> RedirectPayment:
         """Creates a payment request and returns Wave's page to redirect the customer to."""

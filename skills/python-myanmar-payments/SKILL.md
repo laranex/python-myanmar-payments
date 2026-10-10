@@ -23,7 +23,7 @@ Requires Python 3.10+ and depends only on `httpx`. Import everything from `pytho
 
 ## Configure
 
-`MyanmarPayments.from_env()` reads `KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*` (or `AYA_PGW_*`), `YOMA_MMQR_*` and `CYBER_SOURCE_*` from `os.environ` (the same variables as the PHP, Go and Node SDKs). `sandbox` defaults to `True`; set `*_SANDBOX=false` (or `sandbox=False`) in production.
+`MyanmarPayments.from_env()` reads `KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*` (or `AYA_PGW_*`), `YOMA_MMQR_*` and `CYBER_SOURCE_*` plus `MYANMAR_PAYMENTS_HTTP_TIMEOUT` from `os.environ` (the same variables as the PHP, Go and Node SDKs). Every setting except the URL overrides and Yoma's `YOMA_MMQR_WEBHOOK_SECRET` is required, including the HTTP timeout (`MYANMAR_PAYMENTS_HTTP_TIMEOUT`, seconds), `WAVE_MONEY_MERCHANT_NAME`, `WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS` and `YOMA_MMQR_API_VERSION`. The URLs default to each gateway's production endpoints; to test against UAT, set the URL overrides (`KBZ_PAY_BASE_URL`, `KBZ_PAY_PWA_BASE_REDIRECT_URL`, `WAVE_MONEY_BASE_URL`, `WAVE_MONEY_AUTHENTICATE_URL`, `AYA_PAY_BASE_URL`, `YOMA_MMQR_BASE_URL`, `CYBER_SOURCE_BASE_URL`) to the UAT URLs, together with UAT credentials.
 
 ```python
 from python_myanmar_payments import MyanmarPayments
@@ -32,10 +32,10 @@ payments = MyanmarPayments.from_env()  # create once, share across requests
 kbz = payments.kbz_pay()  # also wave_money(), aya_pay(), yoma_mmqr(), cyber_source()
 ```
 
-- Or build one gateway: `KbzPay(KbzPayConfig(app_id=..., app_key=..., merchant_code=...))`, `KbzPay.from_env()` or `KbzPay(KbzPayConfig.from_env())`; in async code use `AsyncMyanmarPayments.from_env()` and `AsyncKbzPay`.
-- Or pass the settings directly: gateways and `MyanmarPayments(kbz_pay={"app_id": ..., "app_key": ..., "merchant_code": ...})` take config objects or mappings of their keyword arguments; a string `sandbox` such as `"false"` is read like the variable.
-- Options (keyword arguments): `http_client` (your own `httpx.Client` / `httpx.AsyncClient`) and `timeout` (seconds, default 30); close the clients the package created with `payments.close()` / `await payments.aclose()` or a `with` block. Yoma and the facades also take `token_cache` (any `TokenCache`, default `MemoryTokenCache`; back it with Redis when you run several processes).
-- A missing credential raises `ConfigurationError` (`gateway`, `key`).
+- Or build one gateway: `KbzPay(KbzPayConfig(app_id=..., app_key=..., merchant_code=..., timeout_seconds=30))`, `KbzPay.from_env()` or `KbzPay(KbzPayConfig.from_env())`; in async code use `AsyncMyanmarPayments.from_env()` and `AsyncKbzPay`.
+- Or pass the settings directly: gateways and `MyanmarPayments(kbz_pay={"app_id": ..., "app_key": ..., "merchant_code": ..., "timeout_seconds": 30})` take config objects or mappings of their keyword arguments; `timeout_seconds` and Wave's `time_to_live_seconds` take an `int` or integer text.
+- Options (keyword arguments): `http_client` (your own `httpx.Client` / `httpx.AsyncClient`) (it keeps its own timeout; without one the gateway creates a client with the config's `timeout_seconds`); close the clients the package created with `payments.close()` / `await payments.aclose()` or a `with` block. Yoma and the facades also take `token_cache` (any `TokenCache`, default `MemoryTokenCache`; back it with Redis when you run several processes).
+- A missing setting raises `ConfigurationError` (`gateway`, `key`), and a time setting that is not a whole number greater than 0 raises it too.
 
 ## Use
 
@@ -45,7 +45,7 @@ Amounts are `Amount.kyat(1000)`, `Amount.parse("1000.50")`, a whole `int`, decim
 
 ### Start a payment
 
-Each gateway takes a data object (`KbzPayPaymentData`, `WaveMoneyPaymentData` with `WaveMoneyItem`s, `AyaPayPaymentData` with an `AyaPayMethod`, `YomaMmqrPaymentData`, `CyberSourcePaymentData` with a `CyberSourceTransactionType`) and returns a typed result:
+Each gateway takes a data object (`KbzPayPaymentData`, `WaveMoneyPaymentData` with `WaveMoneyItem`s, `AyaPayPaymentData` with an `AyaPayMethod`, `YomaMmqrPaymentData`, `CyberSourcePaymentData` with a `CyberSourceTransactionType`) and returns a typed result. `CyberSourcePaymentData` has no defaults: set `currency` (e.g. `"MMK"`), `locale` (e.g. `"en-us"`) and `transaction_type` (e.g. `CyberSourceTransactionType.SALE`).
 
 ```python
 from python_myanmar_payments import Amount, KbzPayPaymentData

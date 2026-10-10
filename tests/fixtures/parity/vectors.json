@@ -440,60 +440,6 @@
             "equal": false
         }
     ],
-    "sandbox": [
-        {
-            "value": "",
-            "sandbox": true
-        },
-        {
-            "value": "true",
-            "sandbox": true
-        },
-        {
-            "value": "1",
-            "sandbox": true
-        },
-        {
-            "value": "yes",
-            "sandbox": true
-        },
-        {
-            "value": "on",
-            "sandbox": true
-        },
-        {
-            "value": "anything",
-            "sandbox": true
-        },
-        {
-            "value": "false",
-            "sandbox": false
-        },
-        {
-            "value": "FALSE",
-            "sandbox": false
-        },
-        {
-            "value": " false ",
-            "sandbox": false
-        },
-        {
-            "value": "0",
-            "sandbox": false
-        },
-        {
-            "value": "f",
-            "sandbox": false
-        },
-        {
-            "value": "no",
-            "sandbox": false
-        },
-        {
-            "value": "Off",
-            "sandbox": false
-        }
-    ],
     "yoma_mmqr_token_cache_key": {
         "base_url": "https://devapi.yomabank.net",
         "client_id": "client",
@@ -531,6 +477,459 @@
         "whole_amounts_only": "Wave Money does not accept decimal amounts; the amount field must be a whole number.",
         "aya_whole_amounts_only": "AYA Payment Gateway does not accept decimal amounts; the amount field must be a whole number.",
         "kbz_decimals": "KBZ Pay accepts at most 2 decimal places; the amount field has 3.",
-        "kbz_timeout_zero": "The timeoutMinutes field must be between 1 and 120."
+        "kbz_timeout_zero": "The timeoutMinutes field must be between 1 and 120.",
+        "configuration_invalid": {
+            "gateway": "wave_money",
+            "key": "time_to_live_in_seconds",
+            "message": "The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+        }
+    },
+    "config": {
+        "env": {
+            "KBZ_PAY_APP_ID": "kp123",
+            "KBZ_PAY_APP_KEY": "test-key",
+            "KBZ_PAY_MERCHANT_CODE": "100001",
+            "WAVE_MONEY_MERCHANT_ID": "merchant",
+            "WAVE_MONEY_SECRET_KEY": "test-secret",
+            "WAVE_MONEY_MERCHANT_NAME": "Shop",
+            "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS": "300",
+            "AYA_PAY_APP_KEY": "app-key",
+            "AYA_PAY_APP_SECRET": "test-secret",
+            "YOMA_MMQR_MERCHANT_ID": "M001",
+            "YOMA_MMQR_CLIENT_ID": "client",
+            "YOMA_MMQR_CLIENT_SECRET": "secret",
+            "YOMA_MMQR_WEBHOOK_HASHKEY": "test-hashkey",
+            "YOMA_MMQR_API_VERSION": "v1rc",
+            "CYBER_SOURCE_PROFILE_ID": "profile",
+            "CYBER_SOURCE_ACCESS_KEY": "access",
+            "CYBER_SOURCE_SECRET_KEY": "test-secret",
+            "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "30"
+        },
+        "seconds": {
+            "time_to_live_in_seconds": 300,
+            "timeout_in_seconds": 30
+        },
+        "urls": {
+            "kbz_pay": {
+                "api_url": "https://api.kbzpay.com/payment/gateway",
+                "pwa_url": "https://wap.kbzpay.com/pgw/pwa/#/"
+            },
+            "wave_money": {
+                "base_url": "https://payments.wavemoney.io",
+                "authenticate_url": "https://payments.wavemoney.io"
+            },
+            "aya_pay": {
+                "base_url": "https://pgw.ayainnovation.com"
+            },
+            "yoma_mmqr": {
+                "base_url": "https://paymenthubapi.yomabank.com"
+            },
+            "cyber_source": {
+                "base_url": "https://secureacceptance.cybersource.com"
+            }
+        },
+        "uat": {
+            "env": {
+                "KBZ_PAY_BASE_URL": "http://api-uat.kbzpay.com/payment/gateway/uat",
+                "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://static.kbzpay.com/pgw/uat/pwa/#/",
+                "WAVE_MONEY_BASE_URL": "https://preprodpayments.wavemoney.io:8107",
+                "WAVE_MONEY_AUTHENTICATE_URL": "https://preprodpayments.wavemoney.io",
+                "AYA_PAY_BASE_URL": "https://uat-pgw.ayainnovation.com",
+                "YOMA_MMQR_BASE_URL": "https://devapi.yomabank.net",
+                "CYBER_SOURCE_BASE_URL": "https://testsecureacceptance.cybersource.com"
+            },
+            "urls": {
+                "kbz_pay": {
+                    "api_url": "http://api-uat.kbzpay.com/payment/gateway/uat",
+                    "pwa_url": "https://static.kbzpay.com/pgw/uat/pwa/#/"
+                },
+                "wave_money": {
+                    "base_url": "https://preprodpayments.wavemoney.io:8107",
+                    "authenticate_url": "https://preprodpayments.wavemoney.io"
+                },
+                "aya_pay": {
+                    "base_url": "https://uat-pgw.ayainnovation.com"
+                },
+                "yoma_mmqr": {
+                    "base_url": "https://devapi.yomabank.net"
+                },
+                "cyber_source": {
+                    "base_url": "https://testsecureacceptance.cybersource.com"
+                }
+            }
+        },
+        "errors": [
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_APP_ID",
+                "value": null,
+                "key": "app_id",
+                "message": "The kbz_pay configuration is missing [app_id]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_APP_ID",
+                "value": "   ",
+                "key": "app_id",
+                "message": "The kbz_pay configuration is missing [app_id]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_APP_KEY",
+                "value": null,
+                "key": "app_key",
+                "message": "The kbz_pay configuration is missing [app_key]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_APP_KEY",
+                "value": "   ",
+                "key": "app_key",
+                "message": "The kbz_pay configuration is missing [app_key]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_MERCHANT_CODE",
+                "value": null,
+                "key": "merchant_code",
+                "message": "The kbz_pay configuration is missing [merchant_code]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_MERCHANT_CODE",
+                "value": "   ",
+                "key": "merchant_code",
+                "message": "The kbz_pay configuration is missing [merchant_code]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": null,
+                "key": "timeout_in_seconds",
+                "message": "The kbz_pay configuration is missing [timeout_in_seconds]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "   ",
+                "key": "timeout_in_seconds",
+                "message": "The kbz_pay configuration is missing [timeout_in_seconds]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_MERCHANT_ID",
+                "value": null,
+                "key": "merchant_id",
+                "message": "The wave_money configuration is missing [merchant_id]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_MERCHANT_ID",
+                "value": "   ",
+                "key": "merchant_id",
+                "message": "The wave_money configuration is missing [merchant_id]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_SECRET_KEY",
+                "value": null,
+                "key": "secret_key",
+                "message": "The wave_money configuration is missing [secret_key]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_SECRET_KEY",
+                "value": "   ",
+                "key": "secret_key",
+                "message": "The wave_money configuration is missing [secret_key]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_MERCHANT_NAME",
+                "value": null,
+                "key": "merchant_name",
+                "message": "The wave_money configuration is missing [merchant_name]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_MERCHANT_NAME",
+                "value": "   ",
+                "key": "merchant_name",
+                "message": "The wave_money configuration is missing [merchant_name]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "value": null,
+                "key": "time_to_live_in_seconds",
+                "message": "The wave_money configuration is missing [time_to_live_in_seconds]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "value": "   ",
+                "key": "time_to_live_in_seconds",
+                "message": "The wave_money configuration is missing [time_to_live_in_seconds]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": null,
+                "key": "timeout_in_seconds",
+                "message": "The wave_money configuration is missing [timeout_in_seconds]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "   ",
+                "key": "timeout_in_seconds",
+                "message": "The wave_money configuration is missing [timeout_in_seconds]."
+            },
+            {
+                "gateway": "aya_pay",
+                "variable": "AYA_PAY_APP_KEY",
+                "value": null,
+                "key": "app_key",
+                "message": "The aya_pay configuration is missing [app_key]."
+            },
+            {
+                "gateway": "aya_pay",
+                "variable": "AYA_PAY_APP_KEY",
+                "value": "   ",
+                "key": "app_key",
+                "message": "The aya_pay configuration is missing [app_key]."
+            },
+            {
+                "gateway": "aya_pay",
+                "variable": "AYA_PAY_APP_SECRET",
+                "value": null,
+                "key": "app_secret",
+                "message": "The aya_pay configuration is missing [app_secret]."
+            },
+            {
+                "gateway": "aya_pay",
+                "variable": "AYA_PAY_APP_SECRET",
+                "value": "   ",
+                "key": "app_secret",
+                "message": "The aya_pay configuration is missing [app_secret]."
+            },
+            {
+                "gateway": "aya_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": null,
+                "key": "timeout_in_seconds",
+                "message": "The aya_pay configuration is missing [timeout_in_seconds]."
+            },
+            {
+                "gateway": "aya_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "   ",
+                "key": "timeout_in_seconds",
+                "message": "The aya_pay configuration is missing [timeout_in_seconds]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_MERCHANT_ID",
+                "value": null,
+                "key": "merchant_id",
+                "message": "The yoma_mmqr configuration is missing [merchant_id]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_MERCHANT_ID",
+                "value": "   ",
+                "key": "merchant_id",
+                "message": "The yoma_mmqr configuration is missing [merchant_id]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_CLIENT_ID",
+                "value": null,
+                "key": "client_id",
+                "message": "The yoma_mmqr configuration is missing [client_id]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_CLIENT_ID",
+                "value": "   ",
+                "key": "client_id",
+                "message": "The yoma_mmqr configuration is missing [client_id]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_CLIENT_SECRET",
+                "value": null,
+                "key": "client_secret",
+                "message": "The yoma_mmqr configuration is missing [client_secret]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_CLIENT_SECRET",
+                "value": "   ",
+                "key": "client_secret",
+                "message": "The yoma_mmqr configuration is missing [client_secret]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_WEBHOOK_HASHKEY",
+                "value": null,
+                "key": "webhook_hashkey",
+                "message": "The yoma_mmqr configuration is missing [webhook_hashkey]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_WEBHOOK_HASHKEY",
+                "value": "   ",
+                "key": "webhook_hashkey",
+                "message": "The yoma_mmqr configuration is missing [webhook_hashkey]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_API_VERSION",
+                "value": null,
+                "key": "api_version",
+                "message": "The yoma_mmqr configuration is missing [api_version]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_API_VERSION",
+                "value": "   ",
+                "key": "api_version",
+                "message": "The yoma_mmqr configuration is missing [api_version]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": null,
+                "key": "timeout_in_seconds",
+                "message": "The yoma_mmqr configuration is missing [timeout_in_seconds]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "   ",
+                "key": "timeout_in_seconds",
+                "message": "The yoma_mmqr configuration is missing [timeout_in_seconds]."
+            },
+            {
+                "gateway": "cyber_source",
+                "variable": "CYBER_SOURCE_PROFILE_ID",
+                "value": null,
+                "key": "profile_id",
+                "message": "The cyber_source configuration is missing [profile_id]."
+            },
+            {
+                "gateway": "cyber_source",
+                "variable": "CYBER_SOURCE_PROFILE_ID",
+                "value": "   ",
+                "key": "profile_id",
+                "message": "The cyber_source configuration is missing [profile_id]."
+            },
+            {
+                "gateway": "cyber_source",
+                "variable": "CYBER_SOURCE_ACCESS_KEY",
+                "value": null,
+                "key": "access_key",
+                "message": "The cyber_source configuration is missing [access_key]."
+            },
+            {
+                "gateway": "cyber_source",
+                "variable": "CYBER_SOURCE_ACCESS_KEY",
+                "value": "   ",
+                "key": "access_key",
+                "message": "The cyber_source configuration is missing [access_key]."
+            },
+            {
+                "gateway": "cyber_source",
+                "variable": "CYBER_SOURCE_SECRET_KEY",
+                "value": null,
+                "key": "secret_key",
+                "message": "The cyber_source configuration is missing [secret_key]."
+            },
+            {
+                "gateway": "cyber_source",
+                "variable": "CYBER_SOURCE_SECRET_KEY",
+                "value": "   ",
+                "key": "secret_key",
+                "message": "The cyber_source configuration is missing [secret_key]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "value": "0",
+                "key": "time_to_live_in_seconds",
+                "message": "The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "value": "-300",
+                "key": "time_to_live_in_seconds",
+                "message": "The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "value": "five",
+                "key": "time_to_live_in_seconds",
+                "message": "The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "value": "1.5",
+                "key": "time_to_live_in_seconds",
+                "message": "The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "0",
+                "key": "timeout_in_seconds",
+                "message": "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "-30",
+                "key": "timeout_in_seconds",
+                "message": "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "thirty",
+                "key": "timeout_in_seconds",
+                "message": "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "2.5",
+                "key": "timeout_in_seconds",
+                "message": "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "0",
+                "key": "timeout_in_seconds",
+                "message": "The wave_money configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "aya_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "0",
+                "key": "timeout_in_seconds",
+                "message": "The aya_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "0",
+                "key": "timeout_in_seconds",
+                "message": "The yoma_mmqr configuration [timeout_in_seconds] must be a whole number greater than 0."
+            }
+        ]
     }
 }

@@ -14,7 +14,6 @@ from ._amount import AmountInput, to_amount
 from ._callback import CallbackRequest, lossless_body
 from ._errors import ApiError, SignatureVerificationError
 from ._http import (
-    DEFAULT_TIMEOUT,
     AsyncGateway,
     GatewayResponse,
     HttpRequest,
@@ -36,13 +35,12 @@ from ._support import (
     config_of,
     default_env,
     env_first,
-    env_sandbox,
     optional_setting,
     query_escape,
     random_hex,
+    require_seconds,
     require_setting,
     safe_equal,
-    sandbox_flag,
     sha256_hex,
     trim_url,
     unix_time,
@@ -63,12 +61,12 @@ __all__ = [
 class KbzPayConfig:
     """KBZ Pay credentials and endpoints.
 
-    A missing credential raises a :class:`~python_myanmar_payments.ConfigurationError`.
+    Every setting except the URL overrides is required; a missing one raises a
+    :class:`~python_myanmar_payments.ConfigurationError`. The URLs default to
+    production.
     """
 
-    SANDBOX_API_URL: ClassVar[str] = "http://api-uat.kbzpay.com/payment/gateway/uat"
     PRODUCTION_API_URL: ClassVar[str] = "https://api.kbzpay.com/payment/gateway"
-    SANDBOX_PWA_URL: ClassVar[str] = "https://static.kbzpay.com/pgw/uat/pwa/#/"
     PRODUCTION_PWA_URL: ClassVar[str] = "https://wap.kbzpay.com/pgw/pwa/#/"
 
     app_id: str
@@ -77,8 +75,8 @@ class KbzPayConfig:
     """The secret key used to sign requests."""
     merchant_code: str
     """The ``merch_code`` KBZ issued."""
-    sandbox: bool
-    """Whether the UAT endpoints are used. UAT and production issue separate credentials."""
+    timeout_seconds: int
+    """Seconds before the default HTTP client gives up on a request."""
     api_url: str
     """The API base URL in use."""
     pwa_url: str
@@ -90,32 +88,23 @@ class KbzPayConfig:
         app_id: str = "",
         app_key: str = "",
         merchant_code: str = "",
-        sandbox: bool | str = True,
+        timeout_seconds: int | str | None = None,
         api_url: str | None = None,
         pwa_url: str | None = None,
     ) -> None:
         self.app_id = require_setting("kbz_pay", "app_id", app_id)
         self.app_key = require_setting("kbz_pay", "app_key", app_key)
         self.merchant_code = require_setting("kbz_pay", "merchant_code", merchant_code)
-        self.sandbox = sandbox = sandbox_flag(sandbox)
-        self.api_url = trim_url(
-            optional_setting(api_url)
-            or (self.SANDBOX_API_URL if sandbox else self.PRODUCTION_API_URL)
-        )
-        self.pwa_url = (
-            trim_url(
-                optional_setting(pwa_url)
-                or (self.SANDBOX_PWA_URL if sandbox else self.PRODUCTION_PWA_URL)
-            )
-            + "/"
-        )
+        self.timeout_seconds = require_seconds("kbz_pay", "timeout_in_seconds", timeout_seconds)
+        self.api_url = trim_url(optional_setting(api_url) or self.PRODUCTION_API_URL)
+        self.pwa_url = trim_url(optional_setting(pwa_url) or self.PRODUCTION_PWA_URL) + "/"
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> KbzPayConfig:
         """Reads the ``KBZ_PAY_*`` environment variables.
 
         ``KBZ_PAY_APP_ID``, ``KBZ_PAY_APP_KEY``, ``KBZ_PAY_MERCHANT_CODE``,
-        ``KBZ_PAY_SANDBOX``, ``KBZ_PAY_BASE_URL`` and
+        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``, ``KBZ_PAY_BASE_URL`` and
         ``KBZ_PAY_PWA_BASE_REDIRECT_URL``. Defaults to ``os.environ``.
         """
         env = default_env() if env is None else env
@@ -123,13 +112,13 @@ class KbzPayConfig:
             app_id=env_first(env, "KBZ_PAY_APP_ID"),
             app_key=env_first(env, "KBZ_PAY_APP_KEY"),
             merchant_code=env_first(env, "KBZ_PAY_MERCHANT_CODE"),
-            sandbox=env_sandbox(env, "KBZ_PAY_SANDBOX"),
+            timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
             api_url=env_first(env, "KBZ_PAY_BASE_URL"),
             pwa_url=env_first(env, "KBZ_PAY_PWA_BASE_REDIRECT_URL"),
         )
 
     def __repr__(self) -> str:
-        return f"KbzPayConfig(app_id={self.app_id!r}, sandbox={self.sandbox!r})"
+        return f"KbzPayConfig(app_id={self.app_id!r})"
 
 
 @dataclass(kw_only=True)
@@ -464,10 +453,9 @@ class KbzPay(_KbzPayBase, SyncGateway):
         config: KbzPayConfig | Mapping[str, Any],
         *,
         http_client: httpx.Client | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> None:
         super().__init__(config)
-        self._init_transport(http_client, timeout)
+        self._init_transport(http_client, self.config.timeout_seconds)
 
     @classmethod
     def from_env(
@@ -475,10 +463,9 @@ class KbzPay(_KbzPayBase, SyncGateway):
         env: EnvSource | None = None,
         *,
         http_client: httpx.Client | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> KbzPay:
         """A gateway configured from the ``KBZ_PAY_*`` environment variables."""
-        return cls(KbzPayConfig.from_env(env), http_client=http_client, timeout=timeout)
+        return cls(KbzPayConfig.from_env(env), http_client=http_client)
 
     def pwa(self, data: KbzPayPaymentData) -> RedirectPayment:
         """Creates an order and returns the KBZ Pay PWA checkout URL.
@@ -518,10 +505,9 @@ class AsyncKbzPay(_KbzPayBase, AsyncGateway):
         config: KbzPayConfig | Mapping[str, Any],
         *,
         http_client: httpx.AsyncClient | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> None:
         super().__init__(config)
-        self._init_transport(http_client, timeout)
+        self._init_transport(http_client, self.config.timeout_seconds)
 
     @classmethod
     def from_env(
@@ -529,10 +515,9 @@ class AsyncKbzPay(_KbzPayBase, AsyncGateway):
         env: EnvSource | None = None,
         *,
         http_client: httpx.AsyncClient | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> AsyncKbzPay:
         """A gateway configured from the ``KBZ_PAY_*`` environment variables."""
-        return cls(KbzPayConfig.from_env(env), http_client=http_client, timeout=timeout)
+        return cls(KbzPayConfig.from_env(env), http_client=http_client)
 
     async def pwa(self, data: KbzPayPaymentData) -> RedirectPayment:
         """Creates an order and returns the KBZ Pay PWA checkout URL."""

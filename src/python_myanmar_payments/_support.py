@@ -117,25 +117,6 @@ def env_first(env: EnvSource, *keys: str) -> str:
     return ""
 
 
-_FALSE = frozenset({"false", "0", "f", "no", "off"})
-
-
-def env_sandbox(env: EnvSource, key: str) -> bool:
-    """Reads a ``*_SANDBOX`` variable.
-
-    Only ``false``, ``0``, ``f``, ``no`` and ``off`` (any case) select production;
-    unset or unrecognized values mean sandbox.
-    """
-    return sandbox_flag(env.get(key) or "")
-
-
-def sandbox_flag(value: bool | str) -> bool:
-    """A ``sandbox`` setting: a bool, or text read like a ``*_SANDBOX`` variable."""
-    if isinstance(value, str):
-        return value.strip().lower() not in _FALSE
-    return bool(value)
-
-
 _C = TypeVar("_C")
 
 
@@ -149,10 +130,22 @@ def config_of(config_class: type[_C], config: _C | Mapping[str, Any]) -> _C:
 _INT = re.compile(r"[+-]?[0-9]+")
 
 
-def env_int(env: EnvSource, key: str) -> int | None:
-    """An integer variable, or ``None`` when unset or not an integer."""
-    value = (env.get(key) or "").strip()
-    return int(value) if _INT.fullmatch(value) else None
+def require_seconds(gateway: str, key: str, value: object) -> int:
+    """A whole number of seconds greater than 0, given as an int or integer text.
+
+    Unset or blank raises a :class:`ConfigurationError` naming ``key``; anything
+    else that is not a whole number greater than 0 raises it as invalid.
+    """
+    if value is None or (isinstance(value, str) and value.strip() == ""):
+        raise ConfigurationError(gateway, key)
+    seconds: int | None = None
+    if isinstance(value, int) and not isinstance(value, bool):
+        seconds = value
+    elif isinstance(value, str) and _INT.fullmatch(value.strip()):
+        seconds = int(value.strip())
+    if seconds is None or seconds <= 0:
+        raise ConfigurationError(gateway, key, invalid=True)
+    return seconds
 
 
 def require_setting(gateway: str, key: str, value: object) -> str:

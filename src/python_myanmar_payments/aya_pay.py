@@ -12,7 +12,6 @@ from ._amount import AmountInput, to_amount
 from ._callback import CallbackRequest, lossless_input, lossless_query_input
 from ._errors import ApiError, SignatureVerificationError
 from ._http import (
-    DEFAULT_TIMEOUT,
     AsyncGateway,
     GatewayResponse,
     HttpRequest,
@@ -28,12 +27,11 @@ from ._support import (
     decode_base64,
     default_env,
     env_first,
-    env_sandbox,
     hmac_sha256_hex,
     optional_setting,
+    require_seconds,
     require_setting,
     safe_equal,
-    sandbox_flag,
     trim_url,
     unix_time,
 )
@@ -53,18 +51,19 @@ __all__ = [
 class AyaPayConfig:
     """AYA Payment Gateway (APG) credentials and endpoints.
 
-    A missing credential raises a :class:`~python_myanmar_payments.ConfigurationError`.
+    Every setting except the URL override is required; a missing one raises a
+    :class:`~python_myanmar_payments.ConfigurationError`. The URL defaults to
+    production.
     """
 
-    SANDBOX_URL: ClassVar[str] = "https://uat-pgw.ayainnovation.com"
     PRODUCTION_URL: ClassVar[str] = "https://pgw.ayainnovation.com"
 
     app_key: str
     """The public application key, sent with every request."""
     app_secret: str
     """The secret that signs requests and verifies callbacks."""
-    sandbox: bool
-    """Whether the UAT environment is used."""
+    timeout_seconds: int
+    """Seconds before the default HTTP client gives up on a request."""
     base_url: str
     """The base URL in use."""
 
@@ -73,34 +72,32 @@ class AyaPayConfig:
         *,
         app_key: str = "",
         app_secret: str = "",
-        sandbox: bool | str = True,
+        timeout_seconds: int | str | None = None,
         base_url: str | None = None,
     ) -> None:
         self.app_key = require_setting("aya_pay", "app_key", app_key)
         self.app_secret = require_setting("aya_pay", "app_secret", app_secret)
-        self.sandbox = sandbox = sandbox_flag(sandbox)
-        self.base_url = trim_url(
-            optional_setting(base_url) or (self.SANDBOX_URL if sandbox else self.PRODUCTION_URL)
-        )
+        self.timeout_seconds = require_seconds("aya_pay", "timeout_in_seconds", timeout_seconds)
+        self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> AyaPayConfig:
         """Reads the ``AYA_PAY_*`` environment variables.
 
-        ``AYA_PAY_APP_KEY``, ``AYA_PAY_APP_SECRET``, ``AYA_PAY_SANDBOX`` and
-        ``AYA_PAY_BASE_URL``, falling back to the ``AYA_PGW_*`` names. Defaults to
-        ``os.environ``.
+        ``AYA_PAY_APP_KEY``, ``AYA_PAY_APP_SECRET``, ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``
+        and ``AYA_PAY_BASE_URL``, falling back to the ``AYA_PGW_*`` names. Defaults
+        to ``os.environ``.
         """
         env = default_env() if env is None else env
         return cls(
             app_key=env_first(env, "AYA_PAY_APP_KEY", "AYA_PGW_APP_KEY"),
             app_secret=env_first(env, "AYA_PAY_APP_SECRET", "AYA_PGW_APP_SECRET"),
-            sandbox=env_sandbox(env, "AYA_PAY_SANDBOX"),
+            timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
             base_url=env_first(env, "AYA_PAY_BASE_URL", "AYA_PGW_BASE_URL"),
         )
 
     def __repr__(self) -> str:
-        return f"AyaPayConfig(app_key={self.app_key!r}, sandbox={self.sandbox!r})"
+        return f"AyaPayConfig(app_key={self.app_key!r})"
 
 
 class AyaPayMethod(_StrEnum):
@@ -444,10 +441,9 @@ class AyaPay(_AyaPayBase, SyncGateway):
         config: AyaPayConfig | Mapping[str, Any],
         *,
         http_client: httpx.Client | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> None:
         super().__init__(config)
-        self._init_transport(http_client, timeout)
+        self._init_transport(http_client, self.config.timeout_seconds)
 
     @classmethod
     def from_env(
@@ -455,10 +451,9 @@ class AyaPay(_AyaPayBase, SyncGateway):
         env: EnvSource | None = None,
         *,
         http_client: httpx.Client | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> AyaPay:
         """A gateway configured from the ``AYA_PAY_*`` (or ``AYA_PGW_*``) variables."""
-        return cls(AyaPayConfig.from_env(env), http_client=http_client, timeout=timeout)
+        return cls(AyaPayConfig.from_env(env), http_client=http_client)
 
     def services(self) -> list[AyaPayService]:
         """Lists the payment channels enabled for your merchant account."""
@@ -482,10 +477,9 @@ class AsyncAyaPay(_AyaPayBase, AsyncGateway):
         config: AyaPayConfig | Mapping[str, Any],
         *,
         http_client: httpx.AsyncClient | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> None:
         super().__init__(config)
-        self._init_transport(http_client, timeout)
+        self._init_transport(http_client, self.config.timeout_seconds)
 
     @classmethod
     def from_env(
@@ -493,10 +487,9 @@ class AsyncAyaPay(_AyaPayBase, AsyncGateway):
         env: EnvSource | None = None,
         *,
         http_client: httpx.AsyncClient | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> AsyncAyaPay:
         """A gateway configured from the ``AYA_PAY_*`` (or ``AYA_PGW_*``) variables."""
-        return cls(AyaPayConfig.from_env(env), http_client=http_client, timeout=timeout)
+        return cls(AyaPayConfig.from_env(env), http_client=http_client)
 
     async def services(self) -> list[AyaPayService]:
         """Lists the payment channels enabled for your merchant account."""

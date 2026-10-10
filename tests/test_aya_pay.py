@@ -29,6 +29,7 @@ SECRET = "test-secret"
 CONFIG: dict[str, Any] = {
     "app_key": "app-key",
     "app_secret": SECRET,
+    "timeout_seconds": 30,
     "base_url": "https://aya.test",
 }
 
@@ -312,23 +313,22 @@ class TestAyaPay:
 
 
 class TestAyaPayConfig:
-    def test_selects_the_endpoints(self) -> None:
-        assert AyaPayConfig(app_key="k", app_secret="s").base_url == AyaPayConfig.SANDBOX_URL
-        production = AyaPayConfig(app_key="k", app_secret="s", sandbox=False)
-        assert production.base_url == AyaPayConfig.PRODUCTION_URL
-        assert repr(production) == "AyaPayConfig(app_key='k', sandbox=False)"
+    def test_defaults_to_production(self) -> None:
+        config = AyaPayConfig(app_key="k", app_secret="s", timeout_seconds=30)
+        assert config.base_url == AyaPayConfig.PRODUCTION_URL
+        assert repr(config) == "AyaPayConfig(app_key='k')"
 
     def test_reads_the_environment_with_the_aya_pgw_fallbacks(self, mode: str) -> None:
         env = {
             "AYA_PGW_APP_KEY": "k",
             "AYA_PGW_APP_SECRET": "s",
             "AYA_PGW_BASE_URL": "https://pgw.test/",
-            "AYA_PAY_SANDBOX": "0",
+            "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "30",
         }
         config = AyaPayConfig.from_env(env)
         assert config.app_key == "k"
         assert config.base_url == "https://pgw.test"
-        assert config.sandbox is False
+        assert config.timeout_seconds == 30
         cls = AyaPay if mode == "sync" else AsyncAyaPay
         assert cls.from_env({**env, "AYA_PAY_APP_KEY": "new"}).config.app_key == "new"
         with pytest.raises(ConfigurationError) as info:

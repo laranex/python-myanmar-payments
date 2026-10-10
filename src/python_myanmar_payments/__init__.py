@@ -15,7 +15,6 @@ from ._errors import (
     SignatureVerificationError,
 )
 from ._facade import AsyncMyanmarPayments, MyanmarPayments
-from ._http import DEFAULT_TIMEOUT
 from ._results import (
     Acknowledgement,
     AppPayment,
@@ -54,7 +53,6 @@ from .wave_money import (
 from .yoma_mmqr import AsyncYomaMmqr, YomaMmqr, YomaMmqrConfig, YomaMmqrPaymentData
 
 __all__ = [
-    "DEFAULT_TIMEOUT",
     "Acknowledgement",
     "Amount",
     "AmountInput",

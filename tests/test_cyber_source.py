@@ -32,6 +32,9 @@ def data(**changes: Any) -> CyberSourcePaymentData:
         "order_id": "ORDER_1",
         "amount": Amount.parse("10000.50"),
         "callback_url": "https://shop.test/cs/callback",
+        "currency": "MMK",
+        "transaction_type": CyberSourceTransactionType.SALE,
+        "locale": "en-us",
     }
     return CyberSourcePaymentData(**{**values, **changes})
 
@@ -69,7 +72,7 @@ class TestCyberSource:
         )
         values = payment.values()
         assert payment.flow is PaymentFlow.FORM
-        assert payment.action == "https://testsecureacceptance.cybersource.com/pay"
+        assert payment.action == "https://secureacceptance.cybersource.com/pay"
         assert payment.enctype == "application/x-www-form-urlencoded"
         assert [field.name for field in payment.fields][-1] == "signature"
         assert values["signed_field_names"] == (
@@ -87,7 +90,7 @@ class TestCyberSource:
         assert values["override_custom_cancel_page"] == "https://shop.test/cancel"
         assert values["signature"] == sign(values)
 
-    def test_uses_the_defaults(self) -> None:
+    def test_sends_the_given_currency_locale_and_transaction_type(self) -> None:
         values = gateway.initiate(data(amount=Decimal("0"))).values()
         assert values["currency"] == "MMK"
         assert values["locale"] == "en-us"
@@ -175,6 +178,12 @@ class TestCyberSource:
             ({"currency": "mmk"}, "currency"),
             ({"currency": 104}, "currency"),
             ({"locale": "en"}, "locale"),
+            ({"currency": ""}, "currency"),
+            ({"currency": None}, "currency"),
+            ({"locale": " "}, "locale"),
+            ({"locale": None}, "locale"),
+            ({"transaction_type": ""}, "transaction_type"),
+            ({"transaction_type": None}, "transaction_type"),
             ({"transaction_type": "refund"}, "transaction_type"),
         ],
     )
@@ -183,6 +192,15 @@ class TestCyberSource:
             CyberSource.validate(data(**change))
         assert info.value.errors[field]
 
+    def test_requires_the_currency_locale_and_transaction_type(self) -> None:
+        with pytest.raises(InvalidPaymentDataError) as info:
+            CyberSource.validate(data(currency="", locale="", transaction_type=""))
+        assert dict(info.value.errors) == {
+            "currency": "The currency field is required.",
+            "locale": "The locale field is required.",
+            "transaction_type": "The transaction_type field is required.",
+        }
+
     def test_accepts_plain_transaction_type_strings(self) -> None:
         payment = gateway.initiate(data(transaction_type="sale,create_payment_token"))
         assert payment.field("transaction_type") == "sale,create_payment_token"
@@ -190,16 +208,15 @@ class TestCyberSource:
 
 class TestCyberSourceConfig:
     def test_selects_the_endpoints_and_reads_the_environment(self) -> None:
-        assert CONFIG.base_url == CyberSourceConfig.SANDBOX_URL
+        assert CONFIG.base_url == CyberSourceConfig.PRODUCTION_URL
         env = {
             "CYBER_SOURCE_PROFILE_ID": "p",
             "CYBER_SOURCE_ACCESS_KEY": "a",
             "CYBER_SOURCE_SECRET_KEY": "s",
-            "CYBER_SOURCE_SANDBOX": "False",
         }
         config = CyberSourceConfig.from_env(env)
         assert config.base_url == CyberSourceConfig.PRODUCTION_URL
-        assert repr(config) == "CyberSourceConfig(profile_id='p', sandbox=False)"
+        assert repr(config) == "CyberSourceConfig(profile_id='p')"
         overridden = {**env, "CYBER_SOURCE_BASE_URL": "https://cs.test/"}
         assert CyberSource.from_env(overridden).config.base_url == "https://cs.test"
         with pytest.raises(ConfigurationError) as info:

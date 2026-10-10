@@ -30,6 +30,7 @@ CONFIG: dict[str, Any] = {
     "app_id": "kp123",
     "app_key": "secret-key",
     "merchant_code": "100001",
+    "timeout_seconds": 30,
     "api_url": "https://kbz.test",
 }
 
@@ -129,7 +130,7 @@ class TestKbzPay:
         assert request["sign"] == signer.sign({**common, **biz})
 
         assert payment.flow == "redirect"
-        assert payment.url.startswith(f"{KbzPayConfig.SANDBOX_PWA_URL}?")
+        assert payment.url.startswith(f"{KbzPayConfig.PRODUCTION_PWA_URL}?")
         assert payment.gateway_reference == "PREPAY123"
         assert payment.order_id == "ORDER_1"
         assert payment.raw["prepay_id"] == "PREPAY123"
@@ -444,7 +445,7 @@ class TestKbzPay:
 class TestKbzPayConfig:
     def test_names_a_missing_key(self) -> None:
         with pytest.raises(ConfigurationError) as info:
-            KbzPayConfig(app_id="a", app_key="", merchant_code="c")
+            KbzPayConfig(app_id="a", app_key="", merchant_code="c", timeout_seconds=30)
         assert info.value.gateway == "kbz_pay"
         assert info.value.key == "app_key"
         assert str(info.value) == "The kbz_pay configuration is missing [app_key]."
@@ -455,26 +456,33 @@ class TestKbzPayConfig:
             "https://static.kbzpay.com/pgw/uat/pwa/#/",
         ):
             config = KbzPayConfig(**{**CONFIG, "pwa_url": pwa_url})
-            assert config.pwa_url == KbzPayConfig.SANDBOX_PWA_URL
+            assert config.pwa_url == "https://static.kbzpay.com/pgw/uat/pwa/#/"
 
-    def test_selects_the_sandbox_or_production_endpoints(self) -> None:
-        sandbox = KbzPayConfig(app_id="a", app_key="b", merchant_code="c")
-        assert sandbox.sandbox is True
-        assert sandbox.api_url == KbzPayConfig.SANDBOX_API_URL
-        assert sandbox.pwa_url == KbzPayConfig.SANDBOX_PWA_URL
-        production = KbzPayConfig(app_id="a", app_key="b", merchant_code="c", sandbox=False)
+    def test_defaults_to_the_production_endpoints(self) -> None:
+        production = KbzPayConfig(app_id="a", app_key="b", merchant_code="c", timeout_seconds=30)
         assert production.api_url == KbzPayConfig.PRODUCTION_API_URL
         assert production.pwa_url == KbzPayConfig.PRODUCTION_PWA_URL
+        assert production.timeout_seconds == 30
         proxied = KbzPayConfig(**{**CONFIG, "api_url": "https://proxy.test/kbz/"})
         assert proxied.api_url == "https://proxy.test/kbz"
-        assert repr(sandbox) == "KbzPayConfig(app_id='a', sandbox=True)"
+        assert repr(production) == "KbzPayConfig(app_id='a')"
+
+    def test_requires_a_whole_number_timeout(self) -> None:
+        with pytest.raises(ConfigurationError) as info:
+            KbzPayConfig(app_id="a", app_key="b", merchant_code="c")
+        assert str(info.value) == "The kbz_pay configuration is missing [timeout_in_seconds]."
+        with pytest.raises(ConfigurationError) as info:
+            KbzPayConfig(app_id="a", app_key="b", merchant_code="c", timeout_seconds=0)
+        assert str(info.value) == (
+            "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
+        )
 
     def test_reads_the_environment(self, mode: str) -> None:
         env = {
             "KBZ_PAY_APP_ID": "kp1",
             "KBZ_PAY_APP_KEY": "key",
             "KBZ_PAY_MERCHANT_CODE": "200",
-            "KBZ_PAY_SANDBOX": "false",
+            "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "15",
             "KBZ_PAY_BASE_URL": "https://api.test/",
             "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://pwa.test/#",
         }
@@ -482,7 +490,7 @@ class TestKbzPayConfig:
         assert config.app_id == "kp1"
         assert config.app_key == "key"
         assert config.merchant_code == "200"
-        assert config.sandbox is False
+        assert config.timeout_seconds == 15
         assert config.api_url == "https://api.test"
         assert config.pwa_url == "https://pwa.test/#/"
         cls = KbzPay if mode == "sync" else AsyncKbzPay
@@ -495,6 +503,7 @@ class TestKbzPayConfig:
         monkeypatch.setenv("KBZ_PAY_APP_ID", "from-process")
         monkeypatch.setenv("KBZ_PAY_APP_KEY", "k")
         monkeypatch.setenv("KBZ_PAY_MERCHANT_CODE", "m")
+        monkeypatch.setenv("MYANMAR_PAYMENTS_HTTP_TIMEOUT", "30")
         assert KbzPayConfig.from_env().app_id == "from-process"
         assert KbzPay.from_env().config.app_id == "from-process"
 
