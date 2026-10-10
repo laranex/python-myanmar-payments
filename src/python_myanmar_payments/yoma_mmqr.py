@@ -19,7 +19,6 @@ from ._cache import AsyncTokenCache, MemoryTokenCache, TokenCache
 from ._callback import CallbackRequest, lossless_body
 from ._errors import ApiError, SignatureVerificationError
 from ._http import (
-    DEFAULT_TIMEOUT,
     AsyncGateway,
     GatewayResponse,
     HttpRequest,
@@ -35,12 +34,11 @@ from ._support import (
     config_of,
     default_env,
     env_first,
-    env_sandbox,
     hmac_sha256_hex,
     optional_setting,
+    require_seconds,
     require_setting,
     safe_equal,
-    sandbox_flag,
     sha256_hex,
     trim_url,
     utc_now,
@@ -59,12 +57,12 @@ __all__ = [
 class YomaMmqrConfig:
     """Yoma MMQR credentials and endpoints.
 
-    A missing credential raises a :class:`~python_myanmar_payments.ConfigurationError`.
+    Every setting except the webhook secret and the URL override is required; a
+    missing one raises a :class:`~python_myanmar_payments.ConfigurationError`.
+    The URL defaults to production.
     """
 
-    SANDBOX_URL: ClassVar[str] = "https://devapi.yomabank.net"
     PRODUCTION_URL: ClassVar[str] = "https://paymenthubapi.yomabank.com"
-    DEFAULT_API_VERSION: ClassVar[str] = "v1rc"
 
     merchant_id: str
     """The merchant ID Yoma issued."""
@@ -74,15 +72,15 @@ class YomaMmqrConfig:
     """The OAuth client secret."""
     webhook_hash_key: str
     """The hash key Yoma issued for verifying callbacks."""
+    api_version: str
+    """The ``{version}`` segment of the API paths, e.g. ``v1rc``."""
+    timeout_seconds: int
+    """Seconds before the default HTTP client gives up on a request."""
     webhook_secret: str | None
     """The secret you shared with Yoma; when set, callbacks must carry it in
     ``X-Webhook-Secret``."""
-    sandbox: bool
-    """Whether the UAT payment hub is used."""
     base_url: str
     """The base URL in use."""
-    api_version: str
-    """The ``{version}`` segment of the API paths in use."""
 
     def __init__(
         self,
@@ -91,21 +89,19 @@ class YomaMmqrConfig:
         client_id: str = "",
         client_secret: str = "",
         webhook_hash_key: str = "",
+        api_version: str = "",
+        timeout_seconds: int | str | None = None,
         webhook_secret: str | None = None,
-        sandbox: bool | str = True,
         base_url: str | None = None,
-        api_version: str | None = None,
     ) -> None:
         self.merchant_id = require_setting("yoma_mmqr", "merchant_id", merchant_id)
         self.client_id = require_setting("yoma_mmqr", "client_id", client_id)
         self.client_secret = require_setting("yoma_mmqr", "client_secret", client_secret)
         self.webhook_hash_key = require_setting("yoma_mmqr", "webhook_hashkey", webhook_hash_key)
+        self.api_version = require_setting("yoma_mmqr", "api_version", api_version)
+        self.timeout_seconds = require_seconds("yoma_mmqr", "timeout_in_seconds", timeout_seconds)
         self.webhook_secret = optional_setting(webhook_secret)
-        self.sandbox = sandbox = sandbox_flag(sandbox)
-        self.base_url = trim_url(
-            optional_setting(base_url) or (self.SANDBOX_URL if sandbox else self.PRODUCTION_URL)
-        )
-        self.api_version = optional_setting(api_version) or self.DEFAULT_API_VERSION
+        self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> YomaMmqrConfig:
@@ -113,8 +109,9 @@ class YomaMmqrConfig:
 
         ``YOMA_MMQR_MERCHANT_ID``, ``YOMA_MMQR_CLIENT_ID``,
         ``YOMA_MMQR_CLIENT_SECRET``, ``YOMA_MMQR_WEBHOOK_HASHKEY``,
-        ``YOMA_MMQR_WEBHOOK_SECRET``, ``YOMA_MMQR_SANDBOX``, ``YOMA_MMQR_BASE_URL``
-        and ``YOMA_MMQR_API_VERSION``. Defaults to ``os.environ``.
+        ``YOMA_MMQR_API_VERSION``, ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``,
+        ``YOMA_MMQR_WEBHOOK_SECRET`` and ``YOMA_MMQR_BASE_URL``. Defaults to
+        ``os.environ``.
         """
         env = default_env() if env is None else env
         return cls(
@@ -122,14 +119,14 @@ class YomaMmqrConfig:
             client_id=env_first(env, "YOMA_MMQR_CLIENT_ID"),
             client_secret=env_first(env, "YOMA_MMQR_CLIENT_SECRET"),
             webhook_hash_key=env_first(env, "YOMA_MMQR_WEBHOOK_HASHKEY"),
-            webhook_secret=env_first(env, "YOMA_MMQR_WEBHOOK_SECRET"),
-            sandbox=env_sandbox(env, "YOMA_MMQR_SANDBOX"),
-            base_url=env_first(env, "YOMA_MMQR_BASE_URL"),
             api_version=env_first(env, "YOMA_MMQR_API_VERSION"),
+            timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
+            webhook_secret=env_first(env, "YOMA_MMQR_WEBHOOK_SECRET"),
+            base_url=env_first(env, "YOMA_MMQR_BASE_URL"),
         )
 
     def __repr__(self) -> str:
-        return f"YomaMmqrConfig(merchant_id={self.merchant_id!r}, sandbox={self.sandbox!r})"
+        return f"YomaMmqrConfig(merchant_id={self.merchant_id!r})"
 
 
 @dataclass(kw_only=True)
@@ -363,10 +360,9 @@ class YomaMmqr(_YomaMmqrBase, SyncGateway):
         *,
         token_cache: TokenCache | None = None,
         http_client: httpx.Client | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> None:
         super().__init__(config)
-        self._init_transport(http_client, timeout)
+        self._init_transport(http_client, self.config.timeout_seconds)
         self._cache: TokenCache = token_cache if token_cache is not None else MemoryTokenCache()
         self._token_lock = threading.Lock()
 
@@ -377,14 +373,12 @@ class YomaMmqr(_YomaMmqrBase, SyncGateway):
         *,
         token_cache: TokenCache | None = None,
         http_client: httpx.Client | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> YomaMmqr:
         """A gateway configured from the ``YOMA_MMQR_*`` environment variables."""
         return cls(
             YomaMmqrConfig.from_env(env),
             token_cache=token_cache,
             http_client=http_client,
-            timeout=timeout,
         )
 
     def initiate(self, data: YomaMmqrPaymentData) -> QrPayment:
@@ -452,10 +446,9 @@ class AsyncYomaMmqr(_YomaMmqrBase, AsyncGateway):
         *,
         token_cache: AnyTokenCache | None = None,
         http_client: httpx.AsyncClient | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> None:
         super().__init__(config)
-        self._init_transport(http_client, timeout)
+        self._init_transport(http_client, self.config.timeout_seconds)
         self._cache: AnyTokenCache = token_cache if token_cache is not None else MemoryTokenCache()
         self._token_lock = asyncio.Lock()
 
@@ -466,14 +459,12 @@ class AsyncYomaMmqr(_YomaMmqrBase, AsyncGateway):
         *,
         token_cache: AnyTokenCache | None = None,
         http_client: httpx.AsyncClient | None = None,
-        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> AsyncYomaMmqr:
         """A gateway configured from the ``YOMA_MMQR_*`` environment variables."""
         return cls(
             YomaMmqrConfig.from_env(env),
             token_cache=token_cache,
             http_client=http_client,
-            timeout=timeout,
         )
 
     async def initiate(self, data: YomaMmqrPaymentData) -> QrPayment:

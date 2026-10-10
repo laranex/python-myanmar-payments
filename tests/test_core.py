@@ -39,14 +39,15 @@ from python_myanmar_payments._json import JsonNumber, parse_object, to_plain
 from python_myanmar_payments._support import (
     current_time,
     decode_base64,
-    env_int,
-    env_sandbox,
     query_escape,
+    require_seconds,
 )
 from python_myanmar_payments._validate import AmountRule, Validator
 from python_myanmar_payments._values import get, scalar_string
 
-KBZ = KbzPayConfig(app_id="a", app_key="b", merchant_code="c", api_url="https://kbz.test")
+KBZ = KbzPayConfig(
+    app_id="a", app_key="b", merchant_code="c", timeout_seconds=30, api_url="https://kbz.test"
+)
 
 
 class QueryDict:
@@ -323,30 +324,24 @@ class TestInternals:
             assert decode_base64(value) is None
         assert decode_base64("/w==") is None  # 0xFF is not UTF-8
 
-    @pytest.mark.parametrize(
-        ("value", "sandbox"),
-        [
-            (None, True),
-            ("", True),
-            ("true", True),
-            ("garbage", True),
-            ("false", False),
-            (" FALSE ", False),
-            ("0", False),
-            ("f", False),
-            ("No", False),
-            ("off", False),
-        ],
-    )
-    def test_reads_the_sandbox_flag(self, value: str | None, sandbox: bool) -> None:
-        env = {} if value is None else {"X_SANDBOX": value}
-        assert env_sandbox(env, "X_SANDBOX") is sandbox
+    @pytest.mark.parametrize(("value", "seconds"), [(30, 30), ("30", 30), (" +5 ", 5)])
+    def test_reads_whole_seconds(self, value: int | str, seconds: int) -> None:
+        assert require_seconds("kbz_pay", "timeout_in_seconds", value) == seconds
 
-    def test_reads_integers(self) -> None:
-        assert env_int({"N": " -5 "}, "N") == -5
-        assert env_int({"N": "+5"}, "N") == 5
-        assert env_int({"N": "5.0"}, "N") is None
-        assert env_int({}, "N") is None
+    @pytest.mark.parametrize("value", [None, "", "   "])
+    def test_reports_missing_seconds(self, value: str | None) -> None:
+        with pytest.raises(ConfigurationError) as info:
+            require_seconds("kbz_pay", "timeout_in_seconds", value)
+        assert str(info.value) == "The kbz_pay configuration is missing [timeout_in_seconds]."
+
+    @pytest.mark.parametrize("value", [0, -5, "0", "-5", "five", "1.5", 1.5, True, [30]])
+    def test_reports_invalid_seconds(self, value: object) -> None:
+        with pytest.raises(ConfigurationError) as info:
+            require_seconds("kbz_pay", "timeout_in_seconds", value)
+        assert (info.value.gateway, info.value.key) == ("kbz_pay", "timeout_in_seconds")
+        assert str(info.value) == (
+            "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
+        )
 
     def test_tells_the_time(self) -> None:
         assert abs(current_time() - time.time()) < 5
@@ -426,13 +421,13 @@ class TestHttpClients:
         original = httpx.Client
 
         def client(**options: Any) -> httpx.Client:
-            assert options == {"timeout": 5.0}
+            assert options == {"timeout": 5}
             instance = original(transport=httpx.MockTransport(handler))
             created.append(instance)
             return instance
 
         monkeypatch.setattr(httpx, "Client", client)
-        with KbzPay(KBZ, timeout=5.0) as kbz:
+        with KbzPay(KbzPayConfig(**{**vars(KBZ), "timeout_seconds": 5})) as kbz:
             assert kbz.status("O1").status is PaymentStatus.UNKNOWN
             kbz.status("O1")
         assert len(created) == 1
@@ -453,7 +448,7 @@ class TestHttpClients:
         original = httpx.AsyncClient
 
         def client(**options: Any) -> httpx.AsyncClient:
-            assert options == {"timeout": 30.0}
+            assert options == {"timeout": 30}
             instance = original(transport=httpx.MockTransport(handler))
             created.append(instance)
             return instance

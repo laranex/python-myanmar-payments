@@ -27,6 +27,8 @@ CONFIG: dict[str, Any] = {
     "merchant_id": "testmerchantID",
     "secret_key": "test-secret",
     "merchant_name": "Shop",
+    "time_to_live_seconds": 300,
+    "timeout_seconds": 30,
     "base_url": "https://wave.test",
 }
 
@@ -77,9 +79,7 @@ class TestWaveMoney:
             ),
         }
         assert payment.flow == "redirect"
-        assert (
-            payment.url == "https://preprodpayments.wavemoney.io/authenticate?transaction_id=TX+1"
-        )
+        assert payment.url == "https://payments.wavemoney.io/authenticate?transaction_id=TX+1"
         assert payment.gateway_reference == "TX 1"
         assert payment.raw == SUCCESS
 
@@ -237,46 +237,52 @@ class TestWaveMoney:
 
 
 class TestWaveMoneyConfig:
-    def test_uses_the_documented_hosts(self) -> None:
-        sandbox = WaveMoneyConfig(merchant_id="m", secret_key="s", merchant_name="n")
-        assert sandbox.base_url == "https://preprodpayments.wavemoney.io:8107"
-        assert sandbox.authenticate_url == "https://preprodpayments.wavemoney.io"
-        assert sandbox.time_to_live_seconds == 300
-        production = WaveMoneyConfig(
-            merchant_id="m", secret_key="s", merchant_name="n", sandbox=False
-        )
-        assert production.base_url == "https://payments.wavemoney.io"
-        assert production.authenticate_url == "https://payments.wavemoney.io"
-        assert repr(production) == "WaveMoneyConfig(merchant_id='m', sandbox=False)"
+    def test_defaults_to_the_production_hosts(self) -> None:
+        config = WaveMoneyConfig(**{**CONFIG, "base_url": None})
+        assert config.base_url == "https://payments.wavemoney.io"
+        assert config.authenticate_url == "https://payments.wavemoney.io"
+        assert config.time_to_live_seconds == 300
+        assert config.timeout_seconds == 30
+        assert repr(config) == "WaveMoneyConfig(merchant_id='testmerchantID')"
 
-    @pytest.mark.parametrize(("ttl", "expected"), [(60, 60), (0, 300), (None, 300), (True, 300)])
-    def test_keeps_only_a_positive_time_to_live(self, ttl: Any, expected: int) -> None:
-        config = WaveMoneyConfig(
-            merchant_id="m", secret_key="s", merchant_name="n", time_to_live_seconds=ttl
-        )
+    @pytest.mark.parametrize(("ttl", "expected"), [(60, 60), ("600", 600), (" +5 ", 5)])
+    def test_reads_a_whole_number_time_to_live(self, ttl: Any, expected: int) -> None:
+        config = WaveMoneyConfig(**{**CONFIG, "time_to_live_seconds": ttl})
         assert config.time_to_live_seconds == expected
+
+    @pytest.mark.parametrize("ttl", [0, -1, True, 1.5, "10m"])
+    def test_rejects_a_time_to_live_that_is_not_a_whole_number(self, ttl: Any) -> None:
+        with pytest.raises(ConfigurationError) as info:
+            WaveMoneyConfig(**{**CONFIG, "time_to_live_seconds": ttl})
+        assert str(info.value) == (
+            "The wave_money configuration [time_to_live_in_seconds] must be a whole number"
+            " greater than 0."
+        )
+
+    def test_requires_the_time_to_live(self) -> None:
+        with pytest.raises(ConfigurationError) as info:
+            WaveMoneyConfig(**{**CONFIG, "time_to_live_seconds": None})
+        assert info.value.key == "time_to_live_in_seconds"
 
     def test_reads_the_environment(self, mode: str) -> None:
         env = {
             "WAVE_MONEY_MERCHANT_ID": "m",
             "WAVE_MONEY_SECRET_KEY": "s",
-            "APP_NAME": "My Shop",
+            "WAVE_MONEY_MERCHANT_NAME": "My Shop",
             "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS": " 600 ",
-            "WAVE_MONEY_SANDBOX": "OFF",
+            "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "20",
             "WAVE_MONEY_BASE_URL": "https://api.wave.test/",
             "WAVE_MONEY_AUTHENTICATE_URL": "https://pay.wave.test/",
         }
         config = WaveMoneyConfig.from_env(env)
         assert config.merchant_name == "My Shop"
         assert config.time_to_live_seconds == 600
-        assert config.sandbox is False
+        assert config.timeout_seconds == 20
         assert config.base_url == "https://api.wave.test"
         assert config.authenticate_url == "https://pay.wave.test"
         env_with_name = {**env, "WAVE_MONEY_MERCHANT_NAME": "Wave Shop"}
         cls = WaveMoney if mode == "sync" else AsyncWaveMoney
         assert cls.from_env(env_with_name).config.merchant_name == "Wave Shop"
-        bad_ttl = {**env, "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS": "10m"}
-        assert WaveMoneyConfig.from_env(bad_ttl).time_to_live_seconds == 300
         with pytest.raises(ConfigurationError) as info:
-            WaveMoneyConfig.from_env({"WAVE_MONEY_MERCHANT_ID": "m", "WAVE_MONEY_SECRET_KEY": "s"})
+            WaveMoneyConfig.from_env({**env, "WAVE_MONEY_MERCHANT_NAME": "", "APP_NAME": "Shop"})
         assert info.value.key == "merchant_name"

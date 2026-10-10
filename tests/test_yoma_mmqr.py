@@ -31,6 +31,8 @@ CONFIG: dict[str, Any] = {
     "client_id": "client",
     "client_secret": "secret",
     "webhook_hash_key": "hash-key",
+    "api_version": "v1rc",
+    "timeout_seconds": 30,
     "base_url": "https://yoma.test",
 }
 API = "https://yoma.test/payment-gateway/v1rc/api"
@@ -323,16 +325,19 @@ class TestYomaMmqr:
 
 
 class TestYomaMmqrConfig:
-    def test_selects_the_endpoints(self) -> None:
+    def test_defaults_to_the_production_endpoint(self) -> None:
         values = {key: value for key, value in CONFIG.items() if key != "base_url"}
-        sandbox = YomaMmqrConfig(**values)
-        assert sandbox.base_url == YomaMmqrConfig.SANDBOX_URL
-        assert sandbox.api_version == "v1rc"
-        assert sandbox.webhook_secret is None
-        production = YomaMmqrConfig(**values, sandbox=False, api_version="v2")
-        assert production.base_url == YomaMmqrConfig.PRODUCTION_URL
-        assert production.api_version == "v2"
-        assert repr(production) == "YomaMmqrConfig(merchant_id='M1', sandbox=False)"
+        config = YomaMmqrConfig(**values)
+        assert config.base_url == YomaMmqrConfig.PRODUCTION_URL
+        assert config.api_version == "v1rc"
+        assert config.timeout_seconds == 30
+        assert config.webhook_secret is None
+        assert repr(config) == "YomaMmqrConfig(merchant_id='M1')"
+
+    def test_requires_the_api_version(self) -> None:
+        with pytest.raises(ConfigurationError) as info:
+            YomaMmqrConfig(**{**CONFIG, "api_version": " "})
+        assert str(info.value) == "The yoma_mmqr configuration is missing [api_version]."
 
     def test_reads_the_environment(self, mode: str) -> None:
         env = {
@@ -341,14 +346,14 @@ class TestYomaMmqrConfig:
             "YOMA_MMQR_CLIENT_SECRET": "s",
             "YOMA_MMQR_WEBHOOK_HASHKEY": "h",
             "YOMA_MMQR_WEBHOOK_SECRET": "w",
-            "YOMA_MMQR_SANDBOX": "no",
+            "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "30",
             "YOMA_MMQR_BASE_URL": "https://y.test/",
             "YOMA_MMQR_API_VERSION": "v1",
         }
         config = YomaMmqrConfig.from_env(env)
         assert config.webhook_hash_key == "h"
         assert config.webhook_secret == "w"
-        assert config.sandbox is False
+        assert config.timeout_seconds == 30
         assert config.base_url == "https://y.test"
         assert config.api_version == "v1"
         cls = YomaMmqr if mode == "sync" else AsyncYomaMmqr

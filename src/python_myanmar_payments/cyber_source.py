@@ -18,13 +18,11 @@ from ._support import (
     config_of,
     default_env,
     env_first,
-    env_sandbox,
     hmac_sha256_base64,
     optional_setting,
     random_hex,
     require_setting,
     safe_equal,
-    sandbox_flag,
     trim_url,
     utc_now,
 )
@@ -42,10 +40,11 @@ __all__ = [
 class CyberSourceConfig:
     """A CyberSource Secure Acceptance profile.
 
-    A missing credential raises a :class:`~python_myanmar_payments.ConfigurationError`.
+    Every setting except the URL override is required; a missing one raises a
+    :class:`~python_myanmar_payments.ConfigurationError`. The URL defaults to
+    production.
     """
 
-    SANDBOX_URL: ClassVar[str] = "https://testsecureacceptance.cybersource.com"
     PRODUCTION_URL: ClassVar[str] = "https://secureacceptance.cybersource.com"
 
     profile_id: str
@@ -54,8 +53,6 @@ class CyberSourceConfig:
     """The profile's access key."""
     secret_key: str
     """The profile's secret key, which signs the fields."""
-    sandbox: bool
-    """Whether the test environment is used."""
     base_url: str
     """The base URL in use."""
 
@@ -65,36 +62,31 @@ class CyberSourceConfig:
         profile_id: str = "",
         access_key: str = "",
         secret_key: str = "",
-        sandbox: bool | str = True,
         base_url: str | None = None,
     ) -> None:
         self.profile_id = require_setting("cyber_source", "profile_id", profile_id)
         self.access_key = require_setting("cyber_source", "access_key", access_key)
         self.secret_key = require_setting("cyber_source", "secret_key", secret_key)
-        self.sandbox = sandbox = sandbox_flag(sandbox)
-        self.base_url = trim_url(
-            optional_setting(base_url) or (self.SANDBOX_URL if sandbox else self.PRODUCTION_URL)
-        )
+        self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> CyberSourceConfig:
         """Reads the ``CYBER_SOURCE_*`` environment variables.
 
         ``CYBER_SOURCE_PROFILE_ID``, ``CYBER_SOURCE_ACCESS_KEY``,
-        ``CYBER_SOURCE_SECRET_KEY``, ``CYBER_SOURCE_SANDBOX`` and
-        ``CYBER_SOURCE_BASE_URL``. Defaults to ``os.environ``.
+        ``CYBER_SOURCE_SECRET_KEY`` and ``CYBER_SOURCE_BASE_URL``. Defaults to
+        ``os.environ``.
         """
         env = default_env() if env is None else env
         return cls(
             profile_id=env_first(env, "CYBER_SOURCE_PROFILE_ID"),
             access_key=env_first(env, "CYBER_SOURCE_ACCESS_KEY"),
             secret_key=env_first(env, "CYBER_SOURCE_SECRET_KEY"),
-            sandbox=env_sandbox(env, "CYBER_SOURCE_SANDBOX"),
             base_url=env_first(env, "CYBER_SOURCE_BASE_URL"),
         )
 
     def __repr__(self) -> str:
-        return f"CyberSourceConfig(profile_id={self.profile_id!r}, sandbox={self.sandbox!r})"
+        return f"CyberSourceConfig(profile_id={self.profile_id!r})"
 
 
 class CyberSourceTransactionType(_StrEnum):
@@ -126,17 +118,17 @@ class CyberSourcePaymentData:
     callback_url: str
     """The URL CyberSource posts the result to (``override_backoffice_post_url``), at
     most 255 characters."""
+    currency: str
+    """An ISO 4217 code, e.g. ``MMK``."""
+    transaction_type: CyberSourceTransactionType | str
+    """What to do with the card, e.g. ``CyberSourceTransactionType.SALE``."""
+    locale: str
+    """The hosted page language, e.g. ``en-us``."""
     return_url: str | None = None
     """The receipt page (``override_custom_receipt_page``), at most 255 characters."""
     cancel_url: str | None = None
     """The page shown on cancel (``override_custom_cancel_page``), at most 255
     characters."""
-    currency: str | None = None
-    """An ISO 4217 code (default ``MMK``)."""
-    transaction_type: CyberSourceTransactionType | None = None
-    """What to do with the card (default ``sale``)."""
-    locale: str | None = None
-    """The hosted page language, e.g. ``en-us`` (the default)."""
 
 
 _SIGNED_FIELDS = (
@@ -209,15 +201,13 @@ class CyberSource:
             .string("cancel_url", data.cancel_url)
             .url("cancel_url", data.cancel_url)
             .max("cancel_url", data.cancel_url, 255)
-            .pattern(
-                "currency",
-                str(data.currency or "MMK"),
-                _CURRENCY,
-                "a three letter ISO 4217 code",
-            )
-            .pattern("locale", str(data.locale or "en-us"), _LOCALE, "a locale code such as en-us")
+            .required("currency", data.currency)
+            .pattern("currency", data.currency, _CURRENCY, "a three letter ISO 4217 code")
+            .required("transaction_type", data.transaction_type)
+            .required("locale", data.locale)
+            .pattern("locale", data.locale, _LOCALE, "a locale code such as en-us")
             .when(
-                str(data.transaction_type or "sale") not in _TRANSACTION_TYPES,
+                str(data.transaction_type) not in _TRANSACTION_TYPES,
                 "transaction_type",
                 "The transaction_type field is not a supported transaction type.",
             )
@@ -238,11 +228,11 @@ class CyberSource:
             "transaction_uuid": random_hex(),
             "signed_field_names": ",".join(_SIGNED_FIELDS),
             "signed_date_time": utc_now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "locale": data.locale or "en-us",
-            "transaction_type": str(data.transaction_type or "sale"),
+            "locale": data.locale,
+            "transaction_type": str(data.transaction_type),
             "reference_number": data.order_id,
             "amount": str(to_amount(data.amount)),
-            "currency": data.currency or "MMK",
+            "currency": data.currency,
             "override_custom_receipt_page": data.return_url or "",
             "override_backoffice_post_url": data.callback_url,
             "override_custom_cancel_page": data.cancel_url or "",

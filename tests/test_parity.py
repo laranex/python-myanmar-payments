@@ -44,34 +44,24 @@ def snake(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
+CONFIG = VECTORS["config"]
+CONFIG_ENV: dict[str, str] = CONFIG["env"]
+CONFIGS: dict[str, Any] = {
+    "kbz_pay": KbzPayConfig,
+    "wave_money": WaveMoneyConfig,
+    "aya_pay": AyaPayConfig,
+    "yoma_mmqr": YomaMmqrConfig,
+    "cyber_source": CyberSourceConfig,
+}
+
+
 def gateways() -> dict[str, Any]:
     return {
-        "kbz_pay": KbzPay(
-            {"app_id": "kp123", "app_key": SECRETS["kbz_pay_app_key"], "merchant_code": "100001"}
-        ),
-        "wave_money": WaveMoney(
-            {
-                "merchant_id": "merchant",
-                "secret_key": SECRETS["wave_money_secret_key"],
-                "merchant_name": "Shop",
-            }
-        ),
-        "aya_pay": AyaPay({"app_key": "app-key", "app_secret": SECRETS["aya_pay_app_secret"]}),
-        "yoma_mmqr": YomaMmqr(
-            {
-                "merchant_id": "M1",
-                "client_id": "client",
-                "client_secret": "secret",
-                "webhook_hash_key": SECRETS["yoma_mmqr_webhook_hashkey"],
-            }
-        ),
-        "cyber_source": CyberSource(
-            {
-                "profile_id": "profile",
-                "access_key": "access",
-                "secret_key": SECRETS["cyber_source_secret_key"],
-            }
-        ),
+        "kbz_pay": KbzPay.from_env(CONFIG_ENV),
+        "wave_money": WaveMoney.from_env(CONFIG_ENV),
+        "aya_pay": AyaPay.from_env(CONFIG_ENV),
+        "yoma_mmqr": YomaMmqr.from_env(CONFIG_ENV),
+        "cyber_source": CyberSource.from_env(CONFIG_ENV),
     }
 
 
@@ -122,51 +112,47 @@ def test_amount_equals(case: dict[str, Any]) -> None:
     assert Amount.parse(case["amount"]).equals(case["other"]) is case["equal"]
 
 
-ENV = {
-    "KBZ_PAY": {
-        "KBZ_PAY_APP_ID": "a",
-        "KBZ_PAY_APP_KEY": "k",
-        "KBZ_PAY_MERCHANT_CODE": "m",
-    },
-    "WAVE_MONEY": {
-        "WAVE_MONEY_MERCHANT_ID": "m",
-        "WAVE_MONEY_SECRET_KEY": "s",
-        "WAVE_MONEY_MERCHANT_NAME": "n",
-    },
-    "AYA_PAY": {"AYA_PAY_APP_KEY": "k", "AYA_PAY_APP_SECRET": "s"},
-    "YOMA_MMQR": {
-        "YOMA_MMQR_MERCHANT_ID": "m",
-        "YOMA_MMQR_CLIENT_ID": "c",
-        "YOMA_MMQR_CLIENT_SECRET": "s",
-        "YOMA_MMQR_WEBHOOK_HASHKEY": "h",
-    },
-    "CYBER_SOURCE": {
-        "CYBER_SOURCE_PROFILE_ID": "p",
-        "CYBER_SOURCE_ACCESS_KEY": "a",
-        "CYBER_SOURCE_SECRET_KEY": "s",
-    },
-}
-CONFIGS: dict[str, Any] = {
-    "KBZ_PAY": KbzPayConfig,
-    "WAVE_MONEY": WaveMoneyConfig,
-    "AYA_PAY": AyaPayConfig,
-    "YOMA_MMQR": YomaMmqrConfig,
-    "CYBER_SOURCE": CyberSourceConfig,
-}
+def urls(config: Any) -> dict[str, str]:
+    names = ("api_url", "pwa_url") if isinstance(config, KbzPayConfig) else ("base_url",)
+    if isinstance(config, WaveMoneyConfig):
+        names = ("base_url", "authenticate_url")
+    return {name: getattr(config, name) for name in names}
 
 
-@pytest.mark.parametrize("case", VECTORS["sandbox"], ids=lambda case: repr(case["value"]))
-@pytest.mark.parametrize("prefix", list(CONFIGS))
-def test_sandbox(prefix: str, case: dict[str, Any]) -> None:
-    env = {**ENV[prefix], f"{prefix}_SANDBOX": case["value"]}
-    assert CONFIGS[prefix].from_env(env).sandbox is case["sandbox"]
-    # The same text given as the `sandbox` setting reads the same way.
-    options = {key.removeprefix(f"{prefix}_").lower(): value for key, value in ENV[prefix].items()}
-    options = {
-        ("webhook_hash_key" if key == "webhook_hashkey" else key): value
-        for key, value in options.items()
-    }
-    assert CONFIGS[prefix](**options, sandbox=case["value"]).sandbox is case["sandbox"]
+@pytest.mark.parametrize("gateway", list(CONFIGS))
+def test_config_defaults_to_production(gateway: str) -> None:
+    config = CONFIGS[gateway].from_env(CONFIG_ENV)
+    assert urls(config) == CONFIG["urls"][gateway]
+    if gateway != "cyber_source":
+        assert config.timeout_seconds == CONFIG["seconds"]["timeout_in_seconds"]
+    if gateway == "wave_money":
+        assert config.time_to_live_seconds == CONFIG["seconds"]["time_to_live_in_seconds"]
+
+
+@pytest.mark.parametrize("gateway", list(CONFIGS))
+def test_config_url_overrides(gateway: str) -> None:
+    config = CONFIGS[gateway].from_env({**CONFIG_ENV, **CONFIG["uat"]["env"]})
+    assert urls(config) == CONFIG["uat"]["urls"][gateway]
+
+
+@pytest.mark.parametrize(
+    "case",
+    CONFIG["errors"],
+    ids=lambda case: f"{case['gateway']}: {case['variable']}={case['value']!r}",
+)
+def test_config_errors(case: dict[str, Any]) -> None:
+    env = dict(CONFIG_ENV)
+    if case["value"] is None:
+        del env[case["variable"]]
+    else:
+        env[case["variable"]] = case["value"]
+    with pytest.raises(ConfigurationError) as info:
+        CONFIGS[case["gateway"]].from_env(env)
+    assert (info.value.gateway, info.value.key, str(info.value)) == (
+        case["gateway"],
+        case["key"],
+        case["message"],
+    )
 
 
 def test_yoma_mmqr_token_cache_key() -> None:
@@ -181,6 +167,8 @@ def test_yoma_mmqr_token_cache_key() -> None:
             "client_id": vector["client_id"],
             "client_secret": "secret",
             "webhook_hash_key": "h",
+            "api_version": "v1rc",
+            "timeout_seconds": 30,
             "base_url": vector["base_url"],
         },
         token_cache=cache,
@@ -211,6 +199,16 @@ def test_invalid_payment_data_message() -> None:
 def test_configuration_message() -> None:
     vector = MESSAGES["configuration"]
     error = ConfigurationError(vector["gateway"], vector["key"])
+    assert (str(error), error.gateway, error.key) == (
+        vector["message"],
+        vector["gateway"],
+        vector["key"],
+    )
+
+
+def test_invalid_configuration_message() -> None:
+    vector = MESSAGES["configuration_invalid"]
+    error = ConfigurationError(vector["gateway"], vector["key"], invalid=True)
     assert (str(error), error.gateway, error.key) == (
         vector["message"],
         vector["gateway"],

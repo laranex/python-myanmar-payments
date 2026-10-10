@@ -14,9 +14,6 @@ import httpx
 from ._errors import ApiError
 from ._json import LosslessObject, dumps, parse_object
 
-DEFAULT_TIMEOUT = 30.0
-"""The default request timeout, in seconds."""
-
 
 @dataclass(frozen=True)
 class HttpRequest:
@@ -81,7 +78,7 @@ def _response(response: httpx.Response) -> GatewayResponse:
 class SyncTransport:
     """Posts requests with an ``httpx.Client``, created on first use unless given."""
 
-    def __init__(self, client: httpx.Client | None, timeout: float | None) -> None:
+    def __init__(self, client: httpx.Client | None, timeout: float) -> None:
         self._client = client
         self._owns_client = client is None
         self._timeout = timeout
@@ -113,7 +110,7 @@ class SyncTransport:
 class AsyncTransport:
     """Posts requests with an ``httpx.AsyncClient``, created on first use unless given."""
 
-    def __init__(self, client: httpx.AsyncClient | None, timeout: float | None) -> None:
+    def __init__(self, client: httpx.AsyncClient | None, timeout: float) -> None:
         self._client = client
         self._owns_client = client is None
         self._timeout = timeout
@@ -147,13 +144,14 @@ class SyncGateway:
     """A gateway that calls its API with a synchronous ``httpx.Client``.
 
     Pass ``http_client`` to share a client (proxies, tracing, test transports);
-    otherwise one is created on first use with ``timeout`` seconds (default 30)
-    and closed by :meth:`close` or a ``with`` block.
+    otherwise one is created on first use with the config's ``timeout_seconds``
+    and closed by :meth:`close` or a ``with`` block. A client you pass keeps its
+    own timeout.
     """
 
     _transport: SyncTransport
 
-    def _init_transport(self, http_client: httpx.Client | None, timeout: float | None) -> None:
+    def _init_transport(self, http_client: httpx.Client | None, timeout: float) -> None:
         self._transport = SyncTransport(http_client, timeout)
 
     def close(self) -> None:
@@ -176,13 +174,13 @@ class AsyncGateway:
     """A gateway that calls its API with an ``httpx.AsyncClient``.
 
     Pass ``http_client`` to share a client; otherwise one is created on first use
-    with ``timeout`` seconds (default 30) and closed by :meth:`aclose` or an
-    ``async with`` block.
+    with the config's ``timeout_seconds`` and closed by :meth:`aclose` or an
+    ``async with`` block. A client you pass keeps its own timeout.
     """
 
     _transport: AsyncTransport
 
-    def _init_transport(self, http_client: httpx.AsyncClient | None, timeout: float | None) -> None:
+    def _init_transport(self, http_client: httpx.AsyncClient | None, timeout: float) -> None:
         self._transport = AsyncTransport(http_client, timeout)
 
     async def aclose(self) -> None:
