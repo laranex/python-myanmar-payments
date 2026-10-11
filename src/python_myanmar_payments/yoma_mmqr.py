@@ -30,13 +30,14 @@ from ._json import LosslessObject, to_plain_object
 from ._results import PaymentCallback, PaymentStatusResult, QrPayment
 from ._status import PaymentStatus, resolve_status
 from ._support import (
+    DEFAULT_TIMEOUT_SECONDS,
     EnvSource,
     config_of,
     default_env,
     env_first,
     hmac_sha256_hex,
     optional_setting,
-    require_seconds,
+    read_timeout,
     require_setting,
     safe_equal,
     sha256_hex,
@@ -57,9 +58,11 @@ __all__ = [
 class YomaMmqrConfig:
     """Yoma MMQR credentials and endpoints.
 
-    Every setting except the webhook secret and the URL override is required; a
-    missing one raises a :class:`~python_myanmar_payments.ConfigurationError`.
-    The URL defaults to production.
+    Every setting except the webhook secret, the HTTP timeout and the URL override
+    is required; a missing one raises a
+    :class:`~python_myanmar_payments.ConfigurationError`. The timeout defaults to
+    :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS` and the URL to
+    production.
     """
 
     PRODUCTION_URL: ClassVar[str] = "https://paymenthubapi.yomabank.com"
@@ -75,7 +78,7 @@ class YomaMmqrConfig:
     api_version: str
     """The ``{version}`` segment of the API paths, e.g. ``v1rc``."""
     timeout_seconds: int
-    """Seconds before the default HTTP client gives up on a request."""
+    """Seconds before the default HTTP client gives up on a request (default 30)."""
     webhook_secret: str | None
     """The secret you shared with Yoma; when set, callbacks must carry it in
     ``X-Webhook-Secret``."""
@@ -90,7 +93,7 @@ class YomaMmqrConfig:
         client_secret: str = "",
         webhook_hash_key: str = "",
         api_version: str = "",
-        timeout_seconds: int | str | None = None,
+        timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
         webhook_secret: str | None = None,
         base_url: str | None = None,
     ) -> None:
@@ -99,7 +102,7 @@ class YomaMmqrConfig:
         self.client_secret = require_setting("yoma_mmqr", "client_secret", client_secret)
         self.webhook_hash_key = require_setting("yoma_mmqr", "webhook_hashkey", webhook_hash_key)
         self.api_version = require_setting("yoma_mmqr", "api_version", api_version)
-        self.timeout_seconds = require_seconds("yoma_mmqr", "timeout_in_seconds", timeout_seconds)
+        self.timeout_seconds = read_timeout("yoma_mmqr", timeout_seconds)
         self.webhook_secret = optional_setting(webhook_secret)
         self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
 

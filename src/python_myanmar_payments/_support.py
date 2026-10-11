@@ -129,6 +129,9 @@ def config_of(config_class: type[_C], config: _C | Mapping[str, Any]) -> _C:
 
 _INT = re.compile(r"[+-]?[0-9]+")
 
+DEFAULT_TIMEOUT_SECONDS = 30
+"""Seconds the default HTTP client waits for a gateway when no timeout is set."""
+
 
 def require_seconds(gateway: str, key: str, value: object) -> int:
     """A whole number of seconds greater than 0, given as an int or integer text.
@@ -163,3 +166,14 @@ def optional_setting(value: object) -> str | None:
 def trim_url(url: str) -> str:
     """Removes trailing slashes."""
     return url.rstrip("/")
+
+
+def read_timeout(gateway: str, value: object) -> int:
+    """The HTTP timeout in whole seconds, :data:`DEFAULT_TIMEOUT_SECONDS` when unset.
+
+    Unset or blank falls back to the default; any other value is read like
+    :func:`require_seconds` and reported under ``timeout_in_seconds``.
+    """
+    if value is None or (isinstance(value, str) and value.strip() == ""):
+        return DEFAULT_TIMEOUT_SECONDS
+    return require_seconds(gateway, "timeout_in_seconds", value)

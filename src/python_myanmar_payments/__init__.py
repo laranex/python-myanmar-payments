@@ -27,6 +27,7 @@ from ._results import (
     RedirectPayment,
 )
 from ._status import PaymentFlow, PaymentStatus, resolve_status
+from ._support import DEFAULT_TIMEOUT_SECONDS
 from ._version import __version__
 from .aya_pay import (
     AsyncAyaPay,
@@ -53,6 +54,7 @@ from .wave_money import (
 from .yoma_mmqr import AsyncYomaMmqr, YomaMmqr, YomaMmqrConfig, YomaMmqrPaymentData
 
 __all__ = [
+    "DEFAULT_TIMEOUT_SECONDS",
     "Acknowledgement",
     "Amount",
     "AmountInput",

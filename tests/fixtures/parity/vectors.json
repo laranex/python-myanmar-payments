@@ -503,11 +503,11 @@
             "CYBER_SOURCE_PROFILE_ID": "profile",
             "CYBER_SOURCE_ACCESS_KEY": "access",
             "CYBER_SOURCE_SECRET_KEY": "test-secret",
-            "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "30"
+            "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "45"
         },
         "seconds": {
             "time_to_live_in_seconds": 300,
-            "timeout_in_seconds": 30
+            "timeout_in_seconds": 45
         },
         "urls": {
             "kbz_pay": {
@@ -602,20 +602,6 @@
                 "message": "The kbz_pay configuration is missing [merchant_code]."
             },
             {
-                "gateway": "kbz_pay",
-                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
-                "value": null,
-                "key": "timeout_in_seconds",
-                "message": "The kbz_pay configuration is missing [timeout_in_seconds]."
-            },
-            {
-                "gateway": "kbz_pay",
-                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
-                "value": "   ",
-                "key": "timeout_in_seconds",
-                "message": "The kbz_pay configuration is missing [timeout_in_seconds]."
-            },
-            {
                 "gateway": "wave_money",
                 "variable": "WAVE_MONEY_MERCHANT_ID",
                 "value": null,
@@ -672,20 +658,6 @@
                 "message": "The wave_money configuration is missing [time_to_live_in_seconds]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
-                "value": null,
-                "key": "timeout_in_seconds",
-                "message": "The wave_money configuration is missing [timeout_in_seconds]."
-            },
-            {
-                "gateway": "wave_money",
-                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
-                "value": "   ",
-                "key": "timeout_in_seconds",
-                "message": "The wave_money configuration is missing [timeout_in_seconds]."
-            },
-            {
                 "gateway": "aya_pay",
                 "variable": "AYA_PAY_APP_KEY",
                 "value": null,
@@ -712,20 +684,6 @@
                 "value": "   ",
                 "key": "app_secret",
                 "message": "The aya_pay configuration is missing [app_secret]."
-            },
-            {
-                "gateway": "aya_pay",
-                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
-                "value": null,
-                "key": "timeout_in_seconds",
-                "message": "The aya_pay configuration is missing [timeout_in_seconds]."
-            },
-            {
-                "gateway": "aya_pay",
-                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
-                "value": "   ",
-                "key": "timeout_in_seconds",
-                "message": "The aya_pay configuration is missing [timeout_in_seconds]."
             },
             {
                 "gateway": "yoma_mmqr",
@@ -796,20 +754,6 @@
                 "value": "   ",
                 "key": "api_version",
                 "message": "The yoma_mmqr configuration is missing [api_version]."
-            },
-            {
-                "gateway": "yoma_mmqr",
-                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
-                "value": null,
-                "key": "timeout_in_seconds",
-                "message": "The yoma_mmqr configuration is missing [timeout_in_seconds]."
-            },
-            {
-                "gateway": "yoma_mmqr",
-                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
-                "value": "   ",
-                "key": "timeout_in_seconds",
-                "message": "The yoma_mmqr configuration is missing [timeout_in_seconds]."
             },
             {
                 "gateway": "cyber_source",
@@ -930,6 +874,14 @@
                 "key": "timeout_in_seconds",
                 "message": "The yoma_mmqr configuration [timeout_in_seconds] must be a whole number greater than 0."
             }
-        ]
+        ],
+        "default_timeout": {
+            "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+            "values": [
+                null,
+                "   "
+            ],
+            "timeout_in_seconds": 30
+        }
     }
 }

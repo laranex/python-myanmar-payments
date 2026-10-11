@@ -155,6 +155,21 @@ def test_config_errors(case: dict[str, Any]) -> None:
     )
 
 
+DEFAULT_TIMEOUT = CONFIG["default_timeout"]
+
+
+@pytest.mark.parametrize("value", DEFAULT_TIMEOUT["values"], ids=repr)
+@pytest.mark.parametrize("gateway", ["kbz_pay", "wave_money", "aya_pay", "yoma_mmqr"])
+def test_config_default_timeout(gateway: str, value: str | None) -> None:
+    env = dict(CONFIG_ENV)
+    if value is None:
+        del env[DEFAULT_TIMEOUT["variable"]]
+    else:
+        env[DEFAULT_TIMEOUT["variable"]] = value
+    config = CONFIGS[gateway].from_env(env)
+    assert config.timeout_seconds == DEFAULT_TIMEOUT["timeout_in_seconds"]
+
+
 def test_yoma_mmqr_token_cache_key() -> None:
     vector = VECTORS["yoma_mmqr_token_cache_key"]
     cache = MemoryTokenCache()

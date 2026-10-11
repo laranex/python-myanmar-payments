@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from python_myanmar_payments import (
+    DEFAULT_TIMEOUT_SECONDS,
     Amount,
     ApiError,
     AsyncKbzPay,
@@ -467,10 +468,11 @@ class TestKbzPayConfig:
         assert proxied.api_url == "https://proxy.test/kbz"
         assert repr(production) == "KbzPayConfig(app_id='a')"
 
-    def test_requires_a_whole_number_timeout(self) -> None:
-        with pytest.raises(ConfigurationError) as info:
-            KbzPayConfig(app_id="a", app_key="b", merchant_code="c")
-        assert str(info.value) == "The kbz_pay configuration is missing [timeout_in_seconds]."
+    def test_defaults_the_timeout_and_requires_a_whole_number(self) -> None:
+        assert KbzPayConfig(app_id="a", app_key="b", merchant_code="c").timeout_seconds == 30
+        for blank in (None, "", "   "):
+            config = KbzPayConfig(app_id="a", app_key="b", merchant_code="c", timeout_seconds=blank)
+            assert config.timeout_seconds == DEFAULT_TIMEOUT_SECONDS == 30
         with pytest.raises(ConfigurationError) as info:
             KbzPayConfig(app_id="a", app_key="b", merchant_code="c", timeout_seconds=0)
         assert str(info.value) == (

@@ -11,6 +11,7 @@ import httpx
 import pytest
 
 from python_myanmar_payments import (
+    DEFAULT_TIMEOUT_SECONDS,
     Acknowledgement,
     ApiError,
     AppPayment,
@@ -42,6 +43,7 @@ from python_myanmar_payments._support import (
     current_time,
     decode_base64,
     query_escape,
+    read_timeout,
     require_seconds,
 )
 from python_myanmar_payments._validate import AmountRule, Validator
@@ -343,6 +345,21 @@ class TestInternals:
         assert (info.value.gateway, info.value.key) == ("kbz_pay", "timeout_in_seconds")
         assert str(info.value) == (
             "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
+        )
+
+    @pytest.mark.parametrize(
+        ("value", "seconds"), [(None, 30), ("", 30), ("   ", 30), (45, 45), (" 45 ", 45)]
+    )
+    def test_reads_the_timeout_or_defaults_to_30_seconds(self, value: object, seconds: int) -> None:
+        assert read_timeout("aya_pay", value) == seconds
+        assert DEFAULT_TIMEOUT_SECONDS == 30
+
+    @pytest.mark.parametrize("value", [0, -30, "0", "-30", "2.5", "thirty", 2.5, True])
+    def test_reports_an_invalid_timeout(self, value: object) -> None:
+        with pytest.raises(ConfigurationError) as info:
+            read_timeout("aya_pay", value)
+        assert str(info.value) == (
+            "The aya_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
         )
 
     def test_tells_the_time(self) -> None:

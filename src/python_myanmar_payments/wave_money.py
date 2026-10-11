@@ -22,6 +22,7 @@ from ._json import LosslessObject, dumps, to_plain_object
 from ._results import PaymentCallback, RedirectPayment
 from ._status import PaymentStatus, resolve_status
 from ._support import (
+    DEFAULT_TIMEOUT_SECONDS,
     EnvSource,
     config_of,
     default_env,
@@ -30,6 +31,7 @@ from ._support import (
     optional_setting,
     query_escape,
     random_hex,
+    read_timeout,
     require_seconds,
     require_setting,
     safe_equal,
@@ -50,9 +52,10 @@ __all__ = [
 class WaveMoneyConfig:
     """Wave Money credentials and endpoints.
 
-    Every setting except the URL overrides is required; a missing one raises a
-    :class:`~python_myanmar_payments.ConfigurationError`. The URLs default to
-    production.
+    Every setting except the HTTP timeout and the URL overrides is required; a
+    missing one raises a :class:`~python_myanmar_payments.ConfigurationError`.
+    The timeout defaults to :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS`
+    and the URLs to production.
     """
 
     PRODUCTION_URL: ClassVar[str] = "https://payments.wavemoney.io"
@@ -67,7 +70,7 @@ class WaveMoneyConfig:
     time_to_live_seconds: int
     """Seconds the customer has to pay."""
     timeout_seconds: int
-    """Seconds before the default HTTP client gives up on a request."""
+    """Seconds before the default HTTP client gives up on a request (default 30)."""
     base_url: str
     """The API base URL in use."""
     authenticate_url: str
@@ -80,7 +83,7 @@ class WaveMoneyConfig:
         secret_key: str = "",
         merchant_name: str = "",
         time_to_live_seconds: int | str | None = None,
-        timeout_seconds: int | str | None = None,
+        timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
         base_url: str | None = None,
         authenticate_url: str | None = None,
     ) -> None:
@@ -90,7 +93,7 @@ class WaveMoneyConfig:
         self.time_to_live_seconds = require_seconds(
             "wave_money", "time_to_live_in_seconds", time_to_live_seconds
         )
-        self.timeout_seconds = require_seconds("wave_money", "timeout_in_seconds", timeout_seconds)
+        self.timeout_seconds = read_timeout("wave_money", timeout_seconds)
         self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
         self.authenticate_url = trim_url(
             optional_setting(authenticate_url) or self.PRODUCTION_AUTHENTICATE_URL

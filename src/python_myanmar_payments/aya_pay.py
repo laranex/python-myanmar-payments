@@ -22,6 +22,7 @@ from ._json import LosslessObject, parse_object, to_plain_object
 from ._results import FormField, FormPayment, PaymentCallback, PaymentStatusResult
 from ._status import PaymentStatus, _StrEnum, resolve_status
 from ._support import (
+    DEFAULT_TIMEOUT_SECONDS,
     EnvSource,
     config_of,
     decode_base64,
@@ -29,7 +30,7 @@ from ._support import (
     env_first,
     hmac_sha256_hex,
     optional_setting,
-    require_seconds,
+    read_timeout,
     require_setting,
     safe_equal,
     trim_url,
@@ -51,9 +52,10 @@ __all__ = [
 class AyaPayConfig:
     """AYA Payment Gateway (APG) credentials and endpoints.
 
-    Every setting except the URL override is required; a missing one raises a
-    :class:`~python_myanmar_payments.ConfigurationError`. The URL defaults to
-    production.
+    Every setting except the HTTP timeout and the URL override is required; a
+    missing one raises a :class:`~python_myanmar_payments.ConfigurationError`.
+    The timeout defaults to :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS`
+    and the URL to production.
     """
 
     PRODUCTION_URL: ClassVar[str] = "https://pgw.ayainnovation.com"
@@ -63,7 +65,7 @@ class AyaPayConfig:
     app_secret: str
     """The secret that signs requests and verifies callbacks."""
     timeout_seconds: int
-    """Seconds before the default HTTP client gives up on a request."""
+    """Seconds before the default HTTP client gives up on a request (default 30)."""
     base_url: str
     """The base URL in use."""
 
@@ -72,12 +74,12 @@ class AyaPayConfig:
         *,
         app_key: str = "",
         app_secret: str = "",
-        timeout_seconds: int | str | None = None,
+        timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
         base_url: str | None = None,
     ) -> None:
         self.app_key = require_setting("aya_pay", "app_key", app_key)
         self.app_secret = require_setting("aya_pay", "app_secret", app_secret)
-        self.timeout_seconds = require_seconds("aya_pay", "timeout_in_seconds", timeout_seconds)
+        self.timeout_seconds = read_timeout("aya_pay", timeout_seconds)
         self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
 
     @classmethod

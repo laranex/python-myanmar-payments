@@ -31,6 +31,7 @@ from ._results import (
 )
 from ._status import PaymentStatus, resolve_status
 from ._support import (
+    DEFAULT_TIMEOUT_SECONDS,
     EnvSource,
     config_of,
     default_env,
@@ -38,7 +39,7 @@ from ._support import (
     optional_setting,
     query_escape,
     random_hex,
-    require_seconds,
+    read_timeout,
     require_setting,
     safe_equal,
     sha256_hex,
@@ -61,9 +62,10 @@ __all__ = [
 class KbzPayConfig:
     """KBZ Pay credentials and endpoints.
 
-    Every setting except the URL overrides is required; a missing one raises a
-    :class:`~python_myanmar_payments.ConfigurationError`. The URLs default to
-    production.
+    Every setting except the HTTP timeout and the URL overrides is required; a
+    missing one raises a :class:`~python_myanmar_payments.ConfigurationError`.
+    The timeout defaults to :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS`
+    and the URLs to production.
     """
 
     PRODUCTION_API_URL: ClassVar[str] = "https://api.kbzpay.com/payment/gateway"
@@ -76,7 +78,7 @@ class KbzPayConfig:
     merchant_code: str
     """The ``merch_code`` KBZ issued."""
     timeout_seconds: int
-    """Seconds before the default HTTP client gives up on a request."""
+    """Seconds before the default HTTP client gives up on a request (default 30)."""
     api_url: str
     """The API base URL in use."""
     pwa_url: str
@@ -88,14 +90,14 @@ class KbzPayConfig:
         app_id: str = "",
         app_key: str = "",
         merchant_code: str = "",
-        timeout_seconds: int | str | None = None,
+        timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
         api_url: str | None = None,
         pwa_url: str | None = None,
     ) -> None:
         self.app_id = require_setting("kbz_pay", "app_id", app_id)
         self.app_key = require_setting("kbz_pay", "app_key", app_key)
         self.merchant_code = require_setting("kbz_pay", "merchant_code", merchant_code)
-        self.timeout_seconds = require_seconds("kbz_pay", "timeout_in_seconds", timeout_seconds)
+        self.timeout_seconds = read_timeout("kbz_pay", timeout_seconds)
         self.api_url = trim_url(optional_setting(api_url) or self.PRODUCTION_API_URL)
         self.pwa_url = trim_url(optional_setting(pwa_url) or self.PRODUCTION_PWA_URL) + "/"
 
