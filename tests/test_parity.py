@@ -41,7 +41,7 @@ SECRETS: dict[str, str] = VECTORS["secrets"]
 
 
 def snake(name: str) -> str:
-    """Python names fields in snake_case: ``timeoutMinutes`` is ``timeout_minutes``."""
+    """Python names fields in snake_case: ``timeToLiveSeconds`` is ``time_to_live_seconds``."""
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
@@ -262,11 +262,15 @@ def test_amount_and_timeout_messages() -> None:
     )
     assert errors_of(KbzPay.validate, kbz)["amount"] == MESSAGES["kbz_decimals"]
 
-    kbz = KbzPayPaymentData(
-        order_id="ORDER_1", amount=1000, callback_url="https://shop.test/cb", timeout_minutes=0
-    )
-    message = MESSAGES["kbz_timeout_zero"].replace("timeoutMinutes", snake("timeoutMinutes"))
-    assert errors_of(KbzPay.validate, kbz)["timeout_minutes"] == message
+    for seconds, key in ((0, "kbz_time_to_live_range"), (90, "kbz_time_to_live_minutes")):
+        kbz = KbzPayPaymentData(
+            order_id="ORDER_1",
+            amount=1000,
+            callback_url="https://shop.test/cb",
+            time_to_live_seconds=seconds,
+        )
+        message = MESSAGES[key].replace("timeToLiveSeconds", snake("timeToLiveSeconds"))
+        assert errors_of(KbzPay.validate, kbz)["time_to_live_seconds"] == message
 
 
 OVERRIDES = VECTORS["wave_money_request_overrides"]

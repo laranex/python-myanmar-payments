@@ -477,7 +477,8 @@
         "whole_amounts_only": "Wave Money does not accept decimal amounts; the amount field must be a whole number.",
         "aya_whole_amounts_only": "AYA Payment Gateway does not accept decimal amounts; the amount field must be a whole number.",
         "kbz_decimals": "KBZ Pay accepts at most 2 decimal places; the amount field has 3.",
-        "kbz_timeout_zero": "The timeoutMinutes field must be between 1 and 120.",
+        "kbz_time_to_live_range": "The timeToLiveSeconds field must be between 60 and 7200.",
+        "kbz_time_to_live_minutes": "The timeToLiveSeconds field must be a multiple of 60.",
         "configuration_invalid": {
             "gateway": "wave_money",
             "key": "time_to_live_in_seconds",

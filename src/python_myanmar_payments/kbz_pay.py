@@ -47,7 +47,7 @@ from ._support import (
     unix_time,
     utc_now,
 )
-from ._validate import AmountRule, Validator
+from ._validate import AmountRule, Validator, is_int
 from ._values import get, is_nested, object_at, optional, scalar_string, trimmed
 
 __all__ = [
@@ -141,8 +141,10 @@ class KbzPayPaymentData:
     characters, no query string."""
     title: str | None = None
     """The product name shown to the customer."""
-    timeout_minutes: int | None = None
-    """How long the order stays payable, 1 to 120 minutes. KBZ defaults to 120."""
+    time_to_live_seconds: int | None = None
+    """Seconds the customer has to pay before the order expires, 60 to 7200 in
+    whole minutes (a multiple of 60). KBZ counts minutes, so 1800 is sent as
+    ``30m``. KBZ defaults to 7200 (120 minutes)."""
     callback_info: str | None = None
     """Free text KBZ sends back unchanged in the callback, at most 512 characters
     once URL-encoded."""
@@ -249,7 +251,12 @@ class _KbzPayBase:
                 "The callback_url field must not contain a query string.",
             )
             .string("title", data.title)
-            .between("timeout_minutes", data.timeout_minutes, 1, 120)
+            .between("time_to_live_seconds", data.time_to_live_seconds, 60, 7200)
+            .when(
+                is_int(data.time_to_live_seconds) and data.time_to_live_seconds % 60 != 0,  # type: ignore[operator]
+                "time_to_live_seconds",
+                "The time_to_live_seconds field must be a multiple of 60.",
+            )
             .string("callback_info", callback_info)
             .max(
                 "callback_info",
@@ -299,8 +306,8 @@ class _KbzPayBase:
         }
         if data.title:
             biz["title"] = data.title
-        if data.timeout_minutes is not None:
-            biz["timeout_express"] = f"{data.timeout_minutes}m"
+        if data.time_to_live_seconds is not None:
+            biz["timeout_express"] = f"{data.time_to_live_seconds // 60}m"
         if data.callback_info:
             biz["callback_info"] = query_escape(data.callback_info)
         return self._call(
@@ -412,8 +419,8 @@ class _KbzPayBase:
             order_id=data.order_id,
             qr_string=qr_code,
             expires_at=None
-            if data.timeout_minutes is None
-            else utc_now() + timedelta(minutes=data.timeout_minutes),
+            if data.time_to_live_seconds is None
+            else utc_now() + timedelta(seconds=data.time_to_live_seconds),
             reference=order.prepay_id,
             raw=to_plain_object(order.response),
         )

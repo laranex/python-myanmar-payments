@@ -26,6 +26,7 @@ Initial release. The version number matches the other Laranex Myanmar payments p
 - Agent skill in `skills/python-myanmar-payments` so coding agents use the package correctly; install it with `npx skills add laranex/python-myanmar-payments`.
 - Requires Python 3.10 or higher.
 - Wave Money per-payment overrides: `WaveMoneyPaymentData` takes optional `merchant_name` and `time_to_live_seconds`, which replace the configured `merchant_name` and `time_to_live_seconds` for that payment (in the form fields and the request hash). The configured values stay required. A blank `merchant_name` fails validation with `The merchant_name field is required.`, and a `time_to_live_seconds` that is not an `int` greater than 0 (booleans and floats included) with `The time_to_live_seconds field must be greater than 0.`
+- `KbzPayPaymentData.timeout_minutes` is renamed to `time_to_live_seconds` and takes seconds, like Wave Money: 60 to 7200, in whole minutes (a multiple of 60), because KBZ's `timeout_express` counts minutes (`1800` is sent as `30m`). Upgrading: multiply the old value by 60.
 
 ### Changed since the pre-releases
 

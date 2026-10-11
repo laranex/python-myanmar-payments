@@ -152,9 +152,9 @@ class TestKbzPay:
         assert payment.qr_image_data_uri() is None
         assert request_of(server)["biz_content"]["trade_type"] == "PAY_BY_QRCODE"
 
-    def test_sets_the_qr_expiry_from_timeout_minutes(self, mode: str, clock: Clock) -> None:
+    def test_sets_the_qr_expiry_from_time_to_live_seconds(self, mode: str, clock: Clock) -> None:
         server = FakeServer(precreate(qrCode="qr"))
-        payment = run(gateway(mode, server).qr(data(timeout_minutes=30)))
+        payment = run(gateway(mode, server).qr(data(time_to_live_seconds=1800)))
         assert payment.expires_at == datetime.fromtimestamp(NOW + 30 * 60, tz=timezone.utc)
 
     def test_fails_when_kbz_returns_no_qr_code(self, mode: str) -> None:
@@ -193,7 +193,7 @@ class TestKbzPay:
                 data(
                     amount=Amount.parse("1000.50"),
                     title="Shoes",
-                    timeout_minutes=30,
+                    time_to_live_seconds=1800,
                     callback_info="cart=9",
                 )
             )
@@ -422,11 +422,12 @@ class TestKbzPay:
             ({"callback_url": "/cb"}, "callback_url"),
             ({"callback_url": f"https://shop.test/{'a' * 500}"}, "callback_url"),
             ({"title": 5}, "title"),
-            ({"timeout_minutes": 121}, "timeout_minutes"),
-            ({"timeout_minutes": 0}, "timeout_minutes"),
-            ({"timeout_minutes": -1}, "timeout_minutes"),
-            ({"timeout_minutes": 1.5}, "timeout_minutes"),
-            ({"timeout_minutes": True}, "timeout_minutes"),
+            ({"time_to_live_seconds": 7260}, "time_to_live_seconds"),
+            ({"time_to_live_seconds": 0}, "time_to_live_seconds"),
+            ({"time_to_live_seconds": -60}, "time_to_live_seconds"),
+            ({"time_to_live_seconds": 90}, "time_to_live_seconds"),
+            ({"time_to_live_seconds": 90.5}, "time_to_live_seconds"),
+            ({"time_to_live_seconds": True}, "time_to_live_seconds"),
             ({"callback_info": "=" * 200}, "callback_info"),
             ({"callback_info": 7}, "callback_info"),
         ],
