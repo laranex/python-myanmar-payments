@@ -480,6 +480,20 @@ class TestKbzPayConfig:
             "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
         )
 
+    def test_takes_an_optional_time_to_live_in_whole_minutes(self) -> None:
+        base = {"app_id": "a", "app_key": "b", "merchant_code": "c"}
+        assert KbzPayConfig(**base).time_to_live_seconds is None
+        assert KbzPayConfig(**base, time_to_live_seconds=1800).time_to_live_seconds == 1800
+        assert KbzPayConfig(**base, time_to_live_seconds=" 7200 ").time_to_live_seconds == 7200
+        for invalid in (90, 0, 7260, True, "thirty"):
+            with pytest.raises(ConfigurationError) as info:
+                KbzPayConfig(**base, time_to_live_seconds=invalid)
+            assert info.value.key == "time_to_live_in_seconds"
+            assert str(info.value) == (
+                "The kbz_pay configuration [time_to_live_in_seconds] must be a multiple of 60 "
+                "from 60 to 7200."
+            )
+
     def test_reads_the_environment(self, mode: str) -> None:
         env = {
             "KBZ_PAY_APP_ID": "kp1",

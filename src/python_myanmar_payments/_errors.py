@@ -83,8 +83,9 @@ class SignatureVerificationError(PaymentError):
 class ConfigurationError(PaymentError):
     """Raised when a gateway is missing a credential or setting it needs.
 
-    ``invalid`` reports a time setting that is set but not a whole number greater
-    than 0.
+    ``invalid`` reports a time setting that is set but out of range: a whole number
+    greater than 0, or ``requirement`` (KBZ Pay's time to live is a multiple of 60
+    from 60 to 7200).
     """
 
     gateway: str
@@ -92,9 +93,15 @@ class ConfigurationError(PaymentError):
     key: str
     """The missing or invalid setting, e.g. ``app_key``."""
 
-    def __init__(self, gateway: str, key: str, invalid: bool = False) -> None:
+    def __init__(
+        self,
+        gateway: str,
+        key: str,
+        invalid: bool = False,
+        requirement: str = "a whole number greater than 0",
+    ) -> None:
         if invalid:
-            message = f"The {gateway} configuration [{key}] must be a whole number greater than 0."
+            message = f"The {gateway} configuration [{key}] must be {requirement}."
         else:
             message = f"The {gateway} configuration is missing [{key}]."
         super().__init__(message)

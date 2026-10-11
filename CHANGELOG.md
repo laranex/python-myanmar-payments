@@ -27,6 +27,7 @@ Initial release. The version number matches the other Laranex Myanmar payments p
 - Requires Python 3.10 or higher.
 - Wave Money per-payment overrides: `WaveMoneyPaymentData` takes optional `merchant_name` and `time_to_live_seconds`, which replace the configured `merchant_name` and `time_to_live_seconds` for that payment (in the form fields and the request hash). The configured values stay required. A blank `merchant_name` fails validation with `The merchant_name field is required.`, and a `time_to_live_seconds` that is not an `int` greater than 0 (booleans and floats included) with `The time_to_live_seconds field must be greater than 0.`
 - `KbzPayPaymentData.timeout_minutes` is renamed to `time_to_live_seconds` and takes seconds, like Wave Money: 60 to 7200, in whole minutes (a multiple of 60), because KBZ's `timeout_express` counts minutes (`1800` is sent as `30m`). Upgrading: multiply the old value by 60.
+- `KBZ_PAY_TIME_TO_LIVE_IN_SECONDS` (`time_to_live_in_seconds`, `KbzPayConfig.time_to_live_seconds`) sets the time to live of every KBZ Pay order, like Wave Money's; a payment's own `time_to_live_seconds` overrides it. It is optional: unset or blank leaves it to KBZ (7200). A value that is not a multiple of 60 from 60 to 7200 raises `ConfigurationError`: `The kbz_pay configuration [time_to_live_in_seconds] must be a multiple of 60 from 60 to 7200.` `ConfigurationError` takes an optional `requirement` for that message.
 
 ### Changed since the pre-releases
 

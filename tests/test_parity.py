@@ -9,6 +9,7 @@ import pytest
 
 from python_myanmar_payments import (
     Amount,
+    AsyncKbzPay,
     AsyncWaveMoney,
     AyaPay,
     AyaPayConfig,
@@ -324,3 +325,38 @@ def test_wave_money_request_overrides(mode: str, case: dict[str, Any]) -> None:
 def test_wave_money_invalid_overrides(case: dict[str, Any]) -> None:
     errors = errors_of(WaveMoney.validate, wave_override_data(case))
     assert list(errors) == [OVERRIDE_FIELDS[case["setting"]]]
+
+
+KBZ_TIME_TO_LIVE = VECTORS["kbz_pay_time_to_live"]
+
+
+@pytest.mark.parametrize("case", KBZ_TIME_TO_LIVE["cases"], ids=repr)
+def test_kbz_pay_time_to_live(mode: str, case: dict[str, Any]) -> None:
+    """The payment's time to live wins, then the configured one, then KBZ's default."""
+    env = dict(CONFIG_ENV)
+    if case["config"] is not None:
+        env[KBZ_TIME_TO_LIVE["variable"]] = case["config"]
+    server = FakeServer(
+        {
+            "Response": {
+                "result": "SUCCESS",
+                "code": "0",
+                "msg": "success",
+                "prepay_id": "PREPAY123",
+                "qrCode": "qr",
+            }
+        }
+    )
+    payment = run(
+        make(mode, KbzPay, AsyncKbzPay, KbzPayConfig.from_env(env), server).qr(
+            KbzPayPaymentData(
+                order_id="ORDER_1",
+                amount=1000,
+                callback_url="https://shop.test/cb",
+                time_to_live_seconds=case["payment"],
+            )
+        )
+    )
+    biz = server.last().json()["Request"]["biz_content"]
+    assert biz.get("timeout_express") == case["timeout_express"]
+    assert (payment.expires_at is None) == (case["timeout_express"] is None)

@@ -12,7 +12,7 @@ import httpx
 
 from ._amount import AmountInput, to_amount
 from ._callback import CallbackRequest, lossless_body
-from ._errors import ApiError, SignatureVerificationError
+from ._errors import ApiError, ConfigurationError, SignatureVerificationError
 from ._http import (
     AsyncGateway,
     GatewayResponse,
@@ -36,6 +36,7 @@ from ._support import (
     config_of,
     default_env,
     env_first,
+    optional_integer,
     optional_setting,
     query_escape,
     random_hex,
@@ -62,14 +63,17 @@ __all__ = [
 class KbzPayConfig:
     """KBZ Pay credentials and endpoints.
 
-    Every setting except the HTTP timeout and the URL overrides is required; a
-    missing one raises a :class:`~python_myanmar_payments.ConfigurationError`.
-    The timeout defaults to :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS`
-    and the URLs to production.
+    Every setting except the HTTP timeout, the time to live and the URL overrides
+    is required; a missing one raises a
+    :class:`~python_myanmar_payments.ConfigurationError`. The timeout defaults to
+    :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS` and the URLs to
+    production.
     """
 
     PRODUCTION_API_URL: ClassVar[str] = "https://api.kbzpay.com/payment/gateway"
     PRODUCTION_PWA_URL: ClassVar[str] = "https://wap.kbzpay.com/pgw/pwa/#/"
+    TIME_TO_LIVE_REQUIREMENT: ClassVar[str] = "a multiple of 60 from 60 to 7200"
+    """What a valid ``time_to_live_in_seconds`` is: KBZ counts whole minutes, up to 120."""
 
     app_id: str
     """The ``appid`` KBZ issued for your merchant app."""
@@ -83,6 +87,10 @@ class KbzPayConfig:
     """The API base URL in use."""
     pwa_url: str
     """The PWA checkout URL in use, always ending in ``/``."""
+    time_to_live_seconds: int | None
+    """Seconds the customer has to pay each order, 60 to 7200 in whole minutes. A
+    payment's own ``time_to_live_seconds`` overrides it; ``None`` leaves it to KBZ
+    (7200)."""
 
     def __init__(
         self,
@@ -93,6 +101,7 @@ class KbzPayConfig:
         timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
         api_url: str | None = None,
         pwa_url: str | None = None,
+        time_to_live_seconds: int | str | None = None,
     ) -> None:
         self.app_id = require_setting("kbz_pay", "app_id", app_id)
         self.app_key = require_setting("kbz_pay", "app_key", app_key)
@@ -100,14 +109,29 @@ class KbzPayConfig:
         self.timeout_seconds = read_timeout("kbz_pay", timeout_seconds)
         self.api_url = trim_url(optional_setting(api_url) or self.PRODUCTION_API_URL)
         self.pwa_url = trim_url(optional_setting(pwa_url) or self.PRODUCTION_PWA_URL) + "/"
+        ttl = optional_integer(
+            "kbz_pay",
+            "time_to_live_in_seconds",
+            time_to_live_seconds,
+            self.TIME_TO_LIVE_REQUIREMENT,
+        )
+        if ttl is not None and not (60 <= ttl <= 7200 and ttl % 60 == 0):
+            raise ConfigurationError(
+                "kbz_pay",
+                "time_to_live_in_seconds",
+                invalid=True,
+                requirement=self.TIME_TO_LIVE_REQUIREMENT,
+            )
+        self.time_to_live_seconds = ttl
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> KbzPayConfig:
         """Reads the ``KBZ_PAY_*`` environment variables.
 
         ``KBZ_PAY_APP_ID``, ``KBZ_PAY_APP_KEY``, ``KBZ_PAY_MERCHANT_CODE``,
-        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``, ``KBZ_PAY_BASE_URL`` and
-        ``KBZ_PAY_PWA_BASE_REDIRECT_URL``. Defaults to ``os.environ``.
+        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``, ``KBZ_PAY_BASE_URL``,
+        ``KBZ_PAY_PWA_BASE_REDIRECT_URL`` and ``KBZ_PAY_TIME_TO_LIVE_IN_SECONDS``.
+        Defaults to ``os.environ``.
         """
         env = default_env() if env is None else env
         return cls(
@@ -117,6 +141,7 @@ class KbzPayConfig:
             timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
             api_url=env_first(env, "KBZ_PAY_BASE_URL"),
             pwa_url=env_first(env, "KBZ_PAY_PWA_BASE_REDIRECT_URL"),
+            time_to_live_seconds=env_first(env, "KBZ_PAY_TIME_TO_LIVE_IN_SECONDS"),
         )
 
     def __repr__(self) -> str:
@@ -144,7 +169,8 @@ class KbzPayPaymentData:
     time_to_live_seconds: int | None = None
     """Seconds the customer has to pay before the order expires, 60 to 7200 in
     whole minutes (a multiple of 60). KBZ counts minutes, so 1800 is sent as
-    ``30m``. KBZ defaults to 7200 (120 minutes)."""
+    ``30m``. Overrides :attr:`KbzPayConfig.time_to_live_seconds`; when both are
+    unset KBZ allows 7200 (120 minutes)."""
     callback_info: str | None = None
     """Free text KBZ sends back unchanged in the callback, at most 512 characters
     once URL-encoded."""
@@ -306,8 +332,9 @@ class _KbzPayBase:
         }
         if data.title:
             biz["title"] = data.title
-        if data.time_to_live_seconds is not None:
-            biz["timeout_express"] = f"{data.time_to_live_seconds // 60}m"
+        time_to_live = self._time_to_live(data)
+        if time_to_live is not None:
+            biz["timeout_express"] = f"{time_to_live // 60}m"
         if data.callback_info:
             biz["callback_info"] = query_escape(data.callback_info)
         return self._call(
@@ -410,8 +437,14 @@ class _KbzPayBase:
             raw=to_plain_object(order.response),
         )
 
-    @staticmethod
-    def _qr_payment(data: KbzPayPaymentData, order: _Order) -> QrPayment:
+    def _time_to_live(self, data: KbzPayPaymentData) -> int | None:
+        """The payment's time to live in seconds, else the configured one."""
+        if data.time_to_live_seconds is not None:
+            return data.time_to_live_seconds
+        return self.config.time_to_live_seconds
+
+    def _qr_payment(self, data: KbzPayPaymentData, order: _Order) -> QrPayment:
+        time_to_live = self._time_to_live(data)
         qr_code = get(order.response, "qrCode")
         if qr_code == "":
             raise ApiError("KBZ Pay did not return a QR code.", raw=to_plain_object(order.response))
@@ -419,8 +452,8 @@ class _KbzPayBase:
             order_id=data.order_id,
             qr_string=qr_code,
             expires_at=None
-            if data.time_to_live_seconds is None
-            else utc_now() + timedelta(seconds=data.time_to_live_seconds),
+            if time_to_live is None
+            else utc_now() + timedelta(seconds=time_to_live),
             reference=order.prepay_id,
             raw=to_plain_object(order.response),
         )

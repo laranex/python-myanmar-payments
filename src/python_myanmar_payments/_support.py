@@ -151,6 +151,21 @@ def require_seconds(gateway: str, key: str, value: object) -> int:
     return seconds
 
 
+def optional_integer(gateway: str, key: str, value: object, requirement: str) -> int | None:
+    """A whole number given as an int or integer text, or ``None`` when unset or blank.
+
+    Anything else raises a :class:`ConfigurationError` naming ``key`` and
+    ``requirement``.
+    """
+    if value is None or (isinstance(value, str) and value.strip() == ""):
+        return None
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str) and _INT.fullmatch(value.strip()):
+        return int(value.strip())
+    raise ConfigurationError(gateway, key, invalid=True, requirement=requirement)
+
+
 def require_setting(gateway: str, key: str, value: object) -> str:
     """The value, or raises a :class:`ConfigurationError` naming ``key``."""
     if not isinstance(value, str) or value.strip() == "":
