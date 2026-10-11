@@ -10,7 +10,12 @@ import httpx
 
 from ._amount import Amount, AmountInput, to_amount
 from ._callback import CallbackRequest, lossless_body
-from ._errors import ApiError, SignatureVerificationError
+from ._errors import (
+    ApiError,
+    ConfigurationError,
+    InvalidPaymentDataError,
+    SignatureVerificationError,
+)
 from ._http import (
     AsyncGateway,
     GatewayResponse,
@@ -28,11 +33,11 @@ from ._support import (
     default_env,
     env_first,
     hmac_sha256_hex,
+    optional_integer,
     optional_setting,
     query_escape,
     random_hex,
     read_timeout,
-    require_seconds,
     require_setting,
     safe_equal,
     trim_url,
@@ -67,8 +72,10 @@ class WaveMoneyConfig:
     """The hash secret key Wave issued."""
     merchant_name: str
     """Your business name, shown on Wave's payment page."""
-    time_to_live_seconds: int
-    """Seconds the customer has to pay."""
+    time_to_live_seconds: int | None
+    """Seconds the customer has to pay, greater than 0. A payment's own
+    ``time_to_live_seconds`` overrides it; with neither set, ``initiate()`` raises
+    :class:`~python_myanmar_payments.InvalidPaymentDataError`."""
     timeout_seconds: int
     """Seconds before the default HTTP client gives up on a request (default 30)."""
     base_url: str
@@ -90,9 +97,15 @@ class WaveMoneyConfig:
         self.merchant_id = require_setting("wave_money", "merchant_id", merchant_id)
         self.secret_key = require_setting("wave_money", "secret_key", secret_key)
         self.merchant_name = require_setting("wave_money", "merchant_name", merchant_name)
-        self.time_to_live_seconds = require_seconds(
-            "wave_money", "time_to_live_in_seconds", time_to_live_seconds
+        ttl = optional_integer(
+            "wave_money",
+            "time_to_live_in_seconds",
+            time_to_live_seconds,
+            "a whole number greater than 0",
         )
+        if ttl is not None and ttl <= 0:
+            raise ConfigurationError("wave_money", "time_to_live_in_seconds", invalid=True)
+        self.time_to_live_seconds = ttl
         self.timeout_seconds = read_timeout("wave_money", timeout_seconds)
         self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
         self.authenticate_url = trim_url(
@@ -160,7 +173,7 @@ class WaveMoneyPaymentData:
     configured ``merchant_name``."""
     time_to_live_seconds: int | None = None
     """Seconds the customer has to pay this payment, greater than 0. Defaults to the
-    configured ``time_to_live_seconds``."""
+    configured ``time_to_live_seconds``; one of the two is required."""
 
 
 _STATUSES: Mapping[str, PaymentStatus] = {
@@ -284,15 +297,22 @@ class _WaveMoneyBase:
 
     def _initiate_request(self, data: WaveMoneyPaymentData) -> HttpRequest:
         self.validate(data)
-        if not data.merchant_reference_id:
-            data.merchant_reference_id = random_hex()
-
-        amount = str(self.resolved_amount(data))
-        ttl = str(
+        ttl = (
             self.config.time_to_live_seconds
             if data.time_to_live_seconds is None
             else data.time_to_live_seconds
         )
+        if ttl is None:
+            raise InvalidPaymentDataError(
+                {
+                    "time_to_live_seconds": "The time_to_live_seconds field is required when "
+                    "the wave_money configuration has no [time_to_live_in_seconds]."
+                }
+            )
+        if not data.merchant_reference_id:
+            data.merchant_reference_id = random_hex()
+
+        amount = str(self.resolved_amount(data))
         merchant_name = (
             self.config.merchant_name if data.merchant_name is None else data.merchant_name
         )
@@ -305,7 +325,7 @@ class _WaveMoneyBase:
         return form_request(
             f"{self.config.base_url}/payment",
             {
-                "time_to_live_in_seconds": ttl,
+                "time_to_live_in_seconds": str(ttl),
                 "merchant_id": self.config.merchant_id,
                 "order_id": data.order_id,
                 "merchant_reference_id": data.merchant_reference_id,
@@ -317,7 +337,7 @@ class _WaveMoneyBase:
                 "items": f"[{items}]",
                 "hash": self._hash(
                     [
-                        ttl,
+                        str(ttl),
                         self.config.merchant_id,
                         data.order_id,
                         amount,

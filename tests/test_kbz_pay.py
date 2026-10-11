@@ -33,6 +33,7 @@ CONFIG: dict[str, Any] = {
     "merchant_code": "100001",
     "timeout_seconds": 30,
     "api_url": "https://kbz.test",
+    "time_to_live_minutes": 120,
 }
 
 signer = KbzPaySigner("secret-key")
@@ -126,6 +127,7 @@ class TestKbzPay:
             "trade_type": "PWAAPP",
             "total_amount": "1000",
             "trans_currency": "MMK",
+            "timeout_express": "120m",
         }
         common = {key: value for key, value in request.items() if key != "biz_content"}
         assert request["sign"] == signer.sign({**common, **biz})
@@ -142,19 +144,34 @@ class TestKbzPay:
         assert query["nonce_str"] == request["nonce_str"]
         assert sign == signer.sign(query)
 
-    def test_returns_the_qr_payload(self, mode: str) -> None:
+    def test_returns_the_qr_payload(self, mode: str, clock: Clock) -> None:
         server = FakeServer(precreate(qrCode="kbzpay://qr/abc"))
         payment = run(gateway(mode, server).qr(data()))
         assert payment.qr_string == "kbzpay://qr/abc"
         assert payment.qr_image is None
         assert payment.reference == "PREPAY123"
-        assert payment.expires_at is None
+        assert payment.expires_at == datetime.fromtimestamp(NOW + 120 * 60, tz=timezone.utc)
         assert payment.qr_image_data_uri() is None
         assert request_of(server)["biz_content"]["trade_type"] == "PAY_BY_QRCODE"
 
-    def test_sets_the_qr_expiry_from_time_to_live_seconds(self, mode: str, clock: Clock) -> None:
+    @pytest.mark.parametrize("flow", ["pwa", "qr", "app"])
+    def test_requires_a_time_to_live_from_the_payment_or_the_config(
+        self, mode: str, flow: str
+    ) -> None:
+        server = FakeServer()
+        config = KbzPayConfig(**{**CONFIG, "time_to_live_minutes": None})
+        kbz = make(mode, KbzPay, AsyncKbzPay, config, server)
+        with pytest.raises(InvalidPaymentDataError) as info:
+            run(getattr(kbz, flow)(data()))
+        assert dict(info.value.errors) == {
+            "time_to_live_minutes": "The time_to_live_minutes field is required when the "
+            "kbz_pay configuration has no [time_to_live_in_minutes]."
+        }
+        assert server.requests == []
+
+    def test_sets_the_qr_expiry_from_time_to_live_minutes(self, mode: str, clock: Clock) -> None:
         server = FakeServer(precreate(qrCode="qr"))
-        payment = run(gateway(mode, server).qr(data(time_to_live_seconds=1800)))
+        payment = run(gateway(mode, server).qr(data(time_to_live_minutes=30)))
         assert payment.expires_at == datetime.fromtimestamp(NOW + 30 * 60, tz=timezone.utc)
 
     def test_fails_when_kbz_returns_no_qr_code(self, mode: str) -> None:
@@ -193,7 +210,7 @@ class TestKbzPay:
                 data(
                     amount=Amount.parse("1000.50"),
                     title="Shoes",
-                    time_to_live_seconds=1800,
+                    time_to_live_minutes=30,
                     callback_info="cart=9",
                 )
             )
@@ -422,12 +439,11 @@ class TestKbzPay:
             ({"callback_url": "/cb"}, "callback_url"),
             ({"callback_url": f"https://shop.test/{'a' * 500}"}, "callback_url"),
             ({"title": 5}, "title"),
-            ({"time_to_live_seconds": 7260}, "time_to_live_seconds"),
-            ({"time_to_live_seconds": 0}, "time_to_live_seconds"),
-            ({"time_to_live_seconds": -60}, "time_to_live_seconds"),
-            ({"time_to_live_seconds": 90}, "time_to_live_seconds"),
-            ({"time_to_live_seconds": 90.5}, "time_to_live_seconds"),
-            ({"time_to_live_seconds": True}, "time_to_live_seconds"),
+            ({"time_to_live_minutes": 121}, "time_to_live_minutes"),
+            ({"time_to_live_minutes": 0}, "time_to_live_minutes"),
+            ({"time_to_live_minutes": -1}, "time_to_live_minutes"),
+            ({"time_to_live_minutes": 1.5}, "time_to_live_minutes"),
+            ({"time_to_live_minutes": True}, "time_to_live_minutes"),
             ({"callback_info": "=" * 200}, "callback_info"),
             ({"callback_info": 7}, "callback_info"),
         ],
@@ -480,18 +496,18 @@ class TestKbzPayConfig:
             "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
         )
 
-    def test_takes_an_optional_time_to_live_in_whole_minutes(self) -> None:
+    def test_takes_an_optional_time_to_live_in_minutes(self) -> None:
         base = {"app_id": "a", "app_key": "b", "merchant_code": "c"}
-        assert KbzPayConfig(**base).time_to_live_seconds is None
-        assert KbzPayConfig(**base, time_to_live_seconds=1800).time_to_live_seconds == 1800
-        assert KbzPayConfig(**base, time_to_live_seconds=" 7200 ").time_to_live_seconds == 7200
-        for invalid in (90, 0, 7260, True, "thirty"):
+        assert KbzPayConfig(**base).time_to_live_minutes is None
+        assert KbzPayConfig(**base, time_to_live_minutes=30).time_to_live_minutes == 30
+        assert KbzPayConfig(**base, time_to_live_minutes=" 120 ").time_to_live_minutes == 120
+        for invalid in (0, 121, -5, True, "thirty"):
             with pytest.raises(ConfigurationError) as info:
-                KbzPayConfig(**base, time_to_live_seconds=invalid)
-            assert info.value.key == "time_to_live_in_seconds"
+                KbzPayConfig(**base, time_to_live_minutes=invalid)
+            assert info.value.key == "time_to_live_in_minutes"
             assert str(info.value) == (
-                "The kbz_pay configuration [time_to_live_in_seconds] must be a multiple of 60 "
-                "from 60 to 7200."
+                "The kbz_pay configuration [time_to_live_in_minutes] must be a whole number "
+                "from 1 to 120."
             )
 
     def test_reads_the_environment(self, mode: str) -> None:

@@ -84,8 +84,8 @@ class ConfigurationError(PaymentError):
     """Raised when a gateway is missing a credential or setting it needs.
 
     ``invalid`` reports a time setting that is set but out of range: a whole number
-    greater than 0, or ``requirement`` (KBZ Pay's time to live is a multiple of 60
-    from 60 to 7200).
+    greater than 0, or ``requirement`` (KBZ Pay's time to live is a whole number
+    from 1 to 120).
     """
 
     gateway: str

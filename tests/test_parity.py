@@ -42,7 +42,7 @@ SECRETS: dict[str, str] = VECTORS["secrets"]
 
 
 def snake(name: str) -> str:
-    """Python names fields in snake_case: ``timeToLiveSeconds`` is ``time_to_live_seconds``."""
+    """Python names fields in snake_case: ``timeToLiveMinutes`` is ``time_to_live_minutes``."""
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
@@ -263,15 +263,16 @@ def test_amount_and_timeout_messages() -> None:
     )
     assert errors_of(KbzPay.validate, kbz)["amount"] == MESSAGES["kbz_decimals"]
 
-    for seconds, key in ((0, "kbz_time_to_live_range"), (90, "kbz_time_to_live_minutes")):
-        kbz = KbzPayPaymentData(
-            order_id="ORDER_1",
-            amount=1000,
-            callback_url="https://shop.test/cb",
-            time_to_live_seconds=seconds,
-        )
-        message = MESSAGES[key].replace("timeToLiveSeconds", snake("timeToLiveSeconds"))
-        assert errors_of(KbzPay.validate, kbz)["time_to_live_seconds"] == message
+    kbz = KbzPayPaymentData(
+        order_id="ORDER_1",
+        amount=1000,
+        callback_url="https://shop.test/cb",
+        time_to_live_minutes=0,
+    )
+    message = MESSAGES["kbz_time_to_live_range"].replace(
+        "timeToLiveMinutes", snake("timeToLiveMinutes")
+    )
+    assert errors_of(KbzPay.validate, kbz)["time_to_live_minutes"] == message
 
 
 OVERRIDES = VECTORS["wave_money_request_overrides"]
@@ -332,8 +333,8 @@ KBZ_TIME_TO_LIVE = VECTORS["kbz_pay_time_to_live"]
 
 @pytest.mark.parametrize("case", KBZ_TIME_TO_LIVE["cases"], ids=repr)
 def test_kbz_pay_time_to_live(mode: str, case: dict[str, Any]) -> None:
-    """The payment's time to live wins, then the configured one, then KBZ's default."""
-    env = dict(CONFIG_ENV)
+    """The payment's time to live wins, then the configured one."""
+    env = without(CONFIG_ENV, KBZ_TIME_TO_LIVE["variable"])
     if case["config"] is not None:
         env[KBZ_TIME_TO_LIVE["variable"]] = case["config"]
     server = FakeServer(
@@ -353,10 +354,62 @@ def test_kbz_pay_time_to_live(mode: str, case: dict[str, Any]) -> None:
                 order_id="ORDER_1",
                 amount=1000,
                 callback_url="https://shop.test/cb",
-                time_to_live_seconds=case["payment"],
+                time_to_live_minutes=case["payment"],
             )
         )
     )
     biz = server.last().json()["Request"]["biz_content"]
-    assert biz.get("timeout_express") == case["timeout_express"]
-    assert (payment.expires_at is None) == (case["timeout_express"] is None)
+    assert biz["timeout_express"] == case["timeout_express"]
+    assert payment.expires_at is not None
+
+
+def without(env: dict[str, str], variable: str) -> dict[str, str]:
+    return {key: value for key, value in env.items() if key != variable}
+
+
+def missing_env(variable: str, value: str | None) -> dict[str, str]:
+    env = without(CONFIG_ENV, variable)
+    if value is not None:
+        env[variable] = value
+    return env
+
+
+@pytest.mark.parametrize("value", KBZ_TIME_TO_LIVE["missing"]["configs"], ids=repr)
+def test_kbz_pay_requires_a_time_to_live(mode: str, value: str | None) -> None:
+    missing = KBZ_TIME_TO_LIVE["missing"]
+    server = FakeServer()
+    config = KbzPayConfig.from_env(missing_env(KBZ_TIME_TO_LIVE["variable"], value))
+    with pytest.raises(InvalidPaymentDataError) as info:
+        run(
+            make(mode, KbzPay, AsyncKbzPay, config, server).qr(
+                KbzPayPaymentData(
+                    order_id="ORDER_1", amount=1000, callback_url="https://shop.test/cb"
+                )
+            )
+        )
+    field = snake(missing["field"])
+    assert dict(info.value.errors) == {field: missing["message"].replace(missing["field"], field)}
+    assert server.requests == []
+
+
+WAVE_TIME_TO_LIVE_MISSING = VECTORS["wave_money_time_to_live_missing"]
+
+
+@pytest.mark.parametrize("value", WAVE_TIME_TO_LIVE_MISSING["configs"], ids=repr)
+def test_wave_money_requires_a_time_to_live(mode: str, value: str | None) -> None:
+    missing = WAVE_TIME_TO_LIVE_MISSING
+    server = FakeServer()
+    config = WaveMoneyConfig.from_env(missing_env(missing["variable"], value))
+    data = WaveMoneyPaymentData(
+        order_id="100",
+        callback_url="https://shop.test/cb",
+        return_url="https://shop.test/done",
+        description="Order 100",
+        items=[WaveMoneyItem("Shoes", 1000)],
+    )
+    with pytest.raises(InvalidPaymentDataError) as info:
+        run(make(mode, WaveMoney, AsyncWaveMoney, config, server).initiate(data))
+    field = snake(missing["field"])
+    assert dict(info.value.errors) == {field: missing["message"].replace(missing["field"], field)}
+    assert server.requests == []
+    assert data.merchant_reference_id is None or data.merchant_reference_id == ""

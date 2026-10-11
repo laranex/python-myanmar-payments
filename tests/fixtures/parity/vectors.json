@@ -477,8 +477,7 @@
         "whole_amounts_only": "Wave Money does not accept decimal amounts; the amount field must be a whole number.",
         "aya_whole_amounts_only": "AYA Payment Gateway does not accept decimal amounts; the amount field must be a whole number.",
         "kbz_decimals": "KBZ Pay accepts at most 2 decimal places; the amount field has 3.",
-        "kbz_time_to_live_range": "The timeToLiveSeconds field must be between 60 and 7200.",
-        "kbz_time_to_live_minutes": "The timeToLiveSeconds field must be a multiple of 60.",
+        "kbz_time_to_live_range": "The timeToLiveMinutes field must be between 1 and 120.",
         "configuration_invalid": {
             "gateway": "wave_money",
             "key": "time_to_live_in_seconds",
@@ -643,20 +642,6 @@
                 "value": "   ",
                 "key": "merchant_name",
                 "message": "The wave_money configuration is missing [merchant_name]."
-            },
-            {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
-                "value": null,
-                "key": "time_to_live_in_seconds",
-                "message": "The wave_money configuration is missing [time_to_live_in_seconds]."
-            },
-            {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
-                "value": "   ",
-                "key": "time_to_live_in_seconds",
-                "message": "The wave_money configuration is missing [time_to_live_in_seconds]."
             },
             {
                 "gateway": "aya_pay",
@@ -856,52 +841,38 @@
             },
             {
                 "gateway": "kbz_pay",
-                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_SECONDS",
-                "value": "90",
-                "key": "time_to_live_in_seconds",
-                "message": "The kbz_pay configuration [time_to_live_in_seconds] must be a multiple of 60 from 60 to 7200."
-            },
-            {
-                "gateway": "kbz_pay",
-                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_SECONDS",
-                "value": "30",
-                "key": "time_to_live_in_seconds",
-                "message": "The kbz_pay configuration [time_to_live_in_seconds] must be a multiple of 60 from 60 to 7200."
-            },
-            {
-                "gateway": "kbz_pay",
-                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_SECONDS",
-                "value": "7260",
-                "key": "time_to_live_in_seconds",
-                "message": "The kbz_pay configuration [time_to_live_in_seconds] must be a multiple of 60 from 60 to 7200."
-            },
-            {
-                "gateway": "kbz_pay",
-                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_SECONDS",
+                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES",
                 "value": "0",
-                "key": "time_to_live_in_seconds",
-                "message": "The kbz_pay configuration [time_to_live_in_seconds] must be a multiple of 60 from 60 to 7200."
+                "key": "time_to_live_in_minutes",
+                "message": "The kbz_pay configuration [time_to_live_in_minutes] must be a whole number from 1 to 120."
             },
             {
                 "gateway": "kbz_pay",
-                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_SECONDS",
-                "value": "-60",
-                "key": "time_to_live_in_seconds",
-                "message": "The kbz_pay configuration [time_to_live_in_seconds] must be a multiple of 60 from 60 to 7200."
+                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES",
+                "value": "121",
+                "key": "time_to_live_in_minutes",
+                "message": "The kbz_pay configuration [time_to_live_in_minutes] must be a whole number from 1 to 120."
             },
             {
                 "gateway": "kbz_pay",
-                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_SECONDS",
+                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES",
+                "value": "-5",
+                "key": "time_to_live_in_minutes",
+                "message": "The kbz_pay configuration [time_to_live_in_minutes] must be a whole number from 1 to 120."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES",
                 "value": "thirty",
-                "key": "time_to_live_in_seconds",
-                "message": "The kbz_pay configuration [time_to_live_in_seconds] must be a multiple of 60 from 60 to 7200."
+                "key": "time_to_live_in_minutes",
+                "message": "The kbz_pay configuration [time_to_live_in_minutes] must be a whole number from 1 to 120."
             },
             {
                 "gateway": "kbz_pay",
-                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_SECONDS",
+                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES",
                 "value": "2.5",
-                "key": "time_to_live_in_seconds",
-                "message": "The kbz_pay configuration [time_to_live_in_seconds] must be a multiple of 60 from 60 to 7200."
+                "key": "time_to_live_in_minutes",
+                "message": "The kbz_pay configuration [time_to_live_in_minutes] must be a whole number from 1 to 120."
             },
             {
                 "gateway": "wave_money",
@@ -993,33 +964,40 @@
         ]
     },
     "kbz_pay_time_to_live": {
-        "variable": "KBZ_PAY_TIME_TO_LIVE_IN_SECONDS",
+        "variable": "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES",
         "cases": [
             {
-                "config": null,
-                "payment": null,
-                "timeout_express": null
-            },
-            {
-                "config": "   ",
-                "payment": null,
-                "timeout_express": null
-            },
-            {
-                "config": "1800",
+                "config": "30",
                 "payment": null,
                 "timeout_express": "30m"
             },
             {
-                "config": "1800",
-                "payment": 600,
+                "config": "30",
+                "payment": 10,
                 "timeout_express": "10m"
             },
             {
                 "config": null,
-                "payment": 600,
+                "payment": 10,
                 "timeout_express": "10m"
             }
-        ]
+        ],
+        "missing": {
+            "configs": [
+                null,
+                "   "
+            ],
+            "field": "timeToLiveMinutes",
+            "message": "The timeToLiveMinutes field is required when the kbz_pay configuration has no [time_to_live_in_minutes]."
+        }
+    },
+    "wave_money_time_to_live_missing": {
+        "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+        "configs": [
+            null,
+            "   "
+        ],
+        "field": "timeToLiveSeconds",
+        "message": "The timeToLiveSeconds field is required when the wave_money configuration has no [time_to_live_in_seconds]."
     }
 }

@@ -295,10 +295,11 @@ class TestWaveMoneyConfig:
             " greater than 0."
         )
 
-    def test_requires_the_time_to_live(self) -> None:
-        with pytest.raises(ConfigurationError) as info:
-            WaveMoneyConfig(**{**CONFIG, "time_to_live_seconds": None})
-        assert info.value.key == "time_to_live_in_seconds"
+    @pytest.mark.parametrize("ttl", [None, "", "   "])
+    def test_takes_an_optional_time_to_live(self, ttl: Any) -> None:
+        assert (
+            WaveMoneyConfig(**{**CONFIG, "time_to_live_seconds": ttl}).time_to_live_seconds is None
+        )
 
     def test_reads_the_environment(self, mode: str) -> None:
         env = {
