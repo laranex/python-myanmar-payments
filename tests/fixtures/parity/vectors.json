@@ -883,5 +883,63 @@
             ],
             "timeout_in_seconds": 30
         }
+    },
+    "wave_money_request_overrides": {
+        "config": {
+            "merchant_id": "testmerchantID",
+            "secret_key": "test-secret",
+            "merchant_name": "Configured Shop",
+            "time_to_live_in_seconds": 300
+        },
+        "data": {
+            "order_id": "100",
+            "merchant_reference_id": "ref-001",
+            "callback_url": "https://shop.test/wave/callback",
+            "return_url": "https://shop.test/done",
+            "description": "Order 100",
+            "items": [
+                [
+                    "Shoes",
+                    1000
+                ]
+            ]
+        },
+        "cases": [
+            {
+                "merchant_name": null,
+                "time_to_live_in_seconds": null,
+                "expected": {
+                    "merchant_name": "Configured Shop",
+                    "time_to_live_in_seconds": "300",
+                    "hash": "0921915e2f0a948b2cffd5a9b22325b044a3c1544d2e3d65612a4527412a38a5"
+                }
+            },
+            {
+                "merchant_name": "Tikkat",
+                "time_to_live_in_seconds": 600,
+                "expected": {
+                    "merchant_name": "Tikkat",
+                    "time_to_live_in_seconds": "600",
+                    "hash": "ddff812ada6da114c807dc2a35cdf8149db2e7a81c7bdf51952a6f232ddb7684"
+                }
+            }
+        ],
+        "invalid": [
+            {
+                "setting": "merchant_name",
+                "merchant_name": "   ",
+                "time_to_live_in_seconds": null
+            },
+            {
+                "setting": "time_to_live_in_seconds",
+                "merchant_name": null,
+                "time_to_live_in_seconds": 0
+            },
+            {
+                "setting": "time_to_live_in_seconds",
+                "merchant_name": null,
+                "time_to_live_in_seconds": -5
+            }
+        ]
     }
 }

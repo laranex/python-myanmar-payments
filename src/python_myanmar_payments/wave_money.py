@@ -155,6 +155,12 @@ class WaveMoneyPaymentData:
 
     ``initiate()`` fills it with a random ID when empty, so store it afterwards:
     Wave's callback may omit ``orderId`` but always carries this."""
+    merchant_name: str | None = None
+    """Your business name shown on Wave's page for this payment. Defaults to the
+    configured ``merchant_name``."""
+    time_to_live_seconds: int | None = None
+    """Seconds the customer has to pay this payment, greater than 0. Defaults to the
+    configured ``time_to_live_seconds``."""
 
 
 _STATUSES: Mapping[str, PaymentStatus] = {
@@ -229,7 +235,10 @@ class _WaveMoneyBase:
             .required("description", data.description)
             .when(len(items) == 0, "items", "The items field must have at least one item.")
             .string("merchant_reference_id", data.merchant_reference_id)
+            .positive("time_to_live_seconds", data.time_to_live_seconds)
         )
+        if data.merchant_name is not None:
+            validator.required("merchant_name", data.merchant_name)
         for index, item in enumerate(items):
             validator.required(f"items.{index}.name", getattr(item, "name", None)).amount(
                 f"items.{index}.amount", getattr(item, "amount", None), _RULE
@@ -279,7 +288,14 @@ class _WaveMoneyBase:
             data.merchant_reference_id = random_hex()
 
         amount = str(self.resolved_amount(data))
-        ttl = str(self.config.time_to_live_seconds)
+        ttl = str(
+            self.config.time_to_live_seconds
+            if data.time_to_live_seconds is None
+            else data.time_to_live_seconds
+        )
+        merchant_name = (
+            self.config.merchant_name if data.merchant_name is None else data.merchant_name
+        )
         # Wave documents items as [{"name": "...", "amount": 1000}] with a numeric
         # amount; the amount text is written as a JSON number without a float.
         items = ",".join(
@@ -297,7 +313,7 @@ class _WaveMoneyBase:
                 "backend_result_url": data.callback_url,
                 "amount": amount,
                 "payment_description": data.description,
-                "merchant_name": self.config.merchant_name,
+                "merchant_name": merchant_name,
                 "items": f"[{items}]",
                 "hash": self._hash(
                     [

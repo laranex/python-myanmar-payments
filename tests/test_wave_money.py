@@ -83,6 +83,34 @@ class TestWaveMoney:
         assert payment.gateway_reference == "TX 1"
         assert payment.raw == SUCCESS
 
+    def test_defaults_to_the_configured_merchant_name_and_time_to_live(self, mode: str) -> None:
+        server = FakeServer(SUCCESS)
+        run(gateway(mode, server).initiate(data(merchant_reference_id="ref-001")))
+        sent = form(server)
+        assert sent["merchant_name"] == "Shop"
+        assert sent["time_to_live_in_seconds"] == "300"
+
+    def test_overrides_the_merchant_name_and_time_to_live_per_payment(self, mode: str) -> None:
+        server = FakeServer(SUCCESS)
+        payment_data = data(
+            merchant_reference_id="ref-001", merchant_name="Tikkat", time_to_live_seconds=600
+        )
+        run(gateway(mode, server).initiate(payment_data))
+        sent = form(server)
+        assert sent["merchant_name"] == "Tikkat"
+        assert sent["time_to_live_in_seconds"] == "600"
+        assert sent["hash"] == hmac_hex(
+            "600testmerchantID1001000https://shop.test/wave/callbackref-001", "test-secret"
+        )
+
+    def test_reports_override_messages(self) -> None:
+        with pytest.raises(InvalidPaymentDataError) as info:
+            WaveMoney.validate(data(merchant_name=" ", time_to_live_seconds=0))
+        assert dict(info.value.errors) == {
+            "merchant_name": "The merchant_name field is required.",
+            "time_to_live_seconds": "The time_to_live_seconds field must be greater than 0.",
+        }
+
     def test_fills_a_random_merchant_reference_id(self, mode: str) -> None:
         payment_data = data()
         run(gateway(mode, FakeServer(SUCCESS)).initiate(payment_data))
@@ -155,6 +183,14 @@ class TestWaveMoney:
             ({"amount": 0}, "amount"),
             ({"items": [], "amount": None}, "amount"),
             ({"merchant_reference_id": 5}, "merchant_reference_id"),
+            ({"merchant_name": ""}, "merchant_name"),
+            ({"merchant_name": " "}, "merchant_name"),
+            ({"merchant_name": 5}, "merchant_name"),
+            ({"time_to_live_seconds": 0}, "time_to_live_seconds"),
+            ({"time_to_live_seconds": -5}, "time_to_live_seconds"),
+            ({"time_to_live_seconds": True}, "time_to_live_seconds"),
+            ({"time_to_live_seconds": 600.0}, "time_to_live_seconds"),
+            ({"time_to_live_seconds": "600"}, "time_to_live_seconds"),
         ],
     )
     def test_validates_against_wave_rules(self, change: Any, field: str) -> None:

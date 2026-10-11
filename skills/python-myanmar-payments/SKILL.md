@@ -60,7 +60,7 @@ payment = kbz.pwa(
 return redirect(payment.url)
 ```
 
-- `RedirectPayment` (`url`) from `kbz.pwa(data)` and `wave.initiate(data)`. Wave fills `data.merchant_reference_id` when empty; store it.
+- `RedirectPayment` (`url`) from `kbz.pwa(data)` and `wave.initiate(data)`. Wave fills `data.merchant_reference_id` when empty; store it. `WaveMoneyPaymentData` also takes optional `merchant_name` and `time_to_live_seconds` (an `int` greater than 0) to override the configured values for one payment.
 - `FormPayment` from `aya.initiate(data)` and `cyber_source.initiate(data)` (no network call, never awaited): return `payment.to_html()` as an auto-submitting page, or render `action`, `fields` and `enctype` yourself.
 - `QrPayment` from `kbz.qr(data)` (encode `qr_string`) and `yoma.initiate(data)` (`qr_image_data_uri()`, `expires_at`, `reference`). A Yoma QR lives `YomaMmqr.QR_LIFETIME_SECONDS` (120); renew it with `yoma.renew_qr(order_id)`.
 - `AppPayment` from `kbz.app(data)`: send `payment.to_dict()` (`orderId`, `orderInfo`, `sign`, `signType`) to your mobile app.

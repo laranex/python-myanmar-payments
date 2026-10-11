@@ -82,6 +82,12 @@ class Validator:
             self._fail(field, f"The {field} field must be between {minimum} and {maximum}.")
         return self
 
+    def positive(self, field: str, value: object) -> Validator:
+        """Fails when a set value is not an integer greater than 0."""
+        if value is not None and (not is_int(value) or value < 1):  # type: ignore[operator]
+            self._fail(field, f"The {field} field must be greater than 0.")
+        return self
+
     def amount(self, field: str, value: object, rule: AmountRule) -> Validator:
         if value is None:
             return self._fail(field, f"The {field} field is required.")

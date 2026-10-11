@@ -9,6 +9,7 @@ import pytest
 
 from python_myanmar_payments import (
     Amount,
+    AsyncWaveMoney,
     AyaPay,
     AyaPayConfig,
     AyaPayMethod,
@@ -33,7 +34,7 @@ from python_myanmar_payments import (
     YomaMmqr,
     YomaMmqrConfig,
 )
-from tests.helpers import FakeServer, fixture
+from tests.helpers import FakeServer, fixture, make, run
 
 VECTORS = fixture("parity/vectors.json")
 SECRETS: dict[str, str] = VECTORS["secrets"]
@@ -266,3 +267,56 @@ def test_amount_and_timeout_messages() -> None:
     )
     message = MESSAGES["kbz_timeout_zero"].replace("timeoutMinutes", snake("timeoutMinutes"))
     assert errors_of(KbzPay.validate, kbz)["timeout_minutes"] == message
+
+
+OVERRIDES = VECTORS["wave_money_request_overrides"]
+OVERRIDE_FIELDS = {
+    "merchant_name": "merchant_name",
+    "time_to_live_in_seconds": "time_to_live_seconds",
+}
+
+
+def wave_override_data(case: dict[str, Any]) -> WaveMoneyPaymentData:
+    data = OVERRIDES["data"]
+    return WaveMoneyPaymentData(
+        order_id=data["order_id"],
+        callback_url=data["callback_url"],
+        return_url=data["return_url"],
+        description=data["description"],
+        items=[WaveMoneyItem(name, amount) for name, amount in data["items"]],
+        merchant_reference_id=data["merchant_reference_id"],
+        merchant_name=case["merchant_name"],
+        time_to_live_seconds=case["time_to_live_in_seconds"],
+    )
+
+
+@pytest.mark.parametrize("case", OVERRIDES["cases"], ids=lambda case: repr(case["merchant_name"]))
+def test_wave_money_request_overrides(mode: str, case: dict[str, Any]) -> None:
+    config = OVERRIDES["config"]
+    server = FakeServer({"message": "success", "transaction_id": "T1"})
+    run(
+        make(
+            mode,
+            WaveMoney,
+            AsyncWaveMoney,
+            WaveMoneyConfig(
+                merchant_id=config["merchant_id"],
+                secret_key=config["secret_key"],
+                merchant_name=config["merchant_name"],
+                time_to_live_seconds=config["time_to_live_in_seconds"],
+            ),
+            server,
+        ).initiate(wave_override_data(case))
+    )
+    sent = server.last().form()
+    assert {name: sent[name] for name in case["expected"]} == case["expected"]
+
+
+@pytest.mark.parametrize(
+    "case",
+    OVERRIDES["invalid"],
+    ids=lambda case: f"{case['setting']}: {case[case['setting']]!r}",
+)
+def test_wave_money_invalid_overrides(case: dict[str, Any]) -> None:
+    errors = errors_of(WaveMoney.validate, wave_override_data(case))
+    assert list(errors) == [OVERRIDE_FIELDS[case["setting"]]]
