@@ -177,6 +177,11 @@ class TestResults:
         assert payment.field("o'k") == "1"
         assert payment.field("missing") is None
         assert payment.values() == {"x": '"><script>alert(1)</script>', "o'k": "1"}
+        assert "<script>document" in html
+        assert "nonce" not in html
+        with_nonce = payment.to_html(nonce='abc"><x')
+        assert '<script nonce="abc&#34;&gt;&lt;x">document' in with_nonce
+        assert with_nonce.replace(' nonce="abc&#34;&gt;&lt;x"', "") == html
         default = FormPayment(order_id="O1", action="https://pay.test", fields=())
         assert default.enctype == "application/x-www-form-urlencoded"
 

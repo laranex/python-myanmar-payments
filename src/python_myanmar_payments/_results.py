@@ -71,11 +71,13 @@ class FormPayment:
         """The fields as a dict, e.g. to render the form with your own template."""
         return {item.name: item.value for item in self.fields}
 
-    def to_html(self) -> str:
+    def to_html(self, nonce: str | None = None) -> str:
         """A complete HTML page that posts the form as soon as it loads.
 
-        Every value is escaped.
+        Every value is escaped. Pass your Content Security Policy ``nonce`` to add
+        it to the inline script.
         """
+        nonce_attribute = "" if nonce is None else f' nonce="{_escape(nonce)}"'
         inputs = "".join(
             f'<input type="hidden" name="{_escape(item.name)}" value="{_escape(item.value)}">'
             for item in self.fields
@@ -87,7 +89,8 @@ class FormPayment:
             f'enctype="{_escape(self.enctype)}">'
             f"{inputs}"
             '<noscript><button type="submit">Continue to payment</button></noscript></form>'
-            '<script>document.getElementById("payment-form").submit();</script></body></html>'
+            f'<script{nonce_attribute}>document.getElementById("payment-form").submit();</script>'
+            "</body></html>"
         )
 
 
