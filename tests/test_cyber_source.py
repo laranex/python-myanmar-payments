@@ -41,7 +41,7 @@ def data(**changes: Any) -> CyberSourcePaymentData:
 
 def sign(fields: dict[str, str]) -> str:
     names = fields["signed_field_names"].split(",")
-    return hmac_base64(",".join(f"{name}={fields[name]}" for name in names), SECRET)
+    return hmac_base64(",".join(f"{name}={fields.get(name, '')}" for name in names), SECRET)
 
 
 def result(**changes: str) -> dict[str, str]:
@@ -118,7 +118,9 @@ class TestCyberSource:
         }
 
     def test_falls_back_to_the_requested_amount(self) -> None:
-        fields = result(signed_field_names="decision,req_reference_number,req_amount")
+        fields = result(
+            signed_field_names="decision,req_reference_number,req_amount,signed_field_names"
+        )
         callback = gateway.handle_callback(CallbackRequest(query=urlencode(fields)))
         assert callback.amount == "10000.50"
         assert callback.gateway_reference is None
@@ -131,7 +133,6 @@ class TestCyberSource:
             ("DECLINE", PaymentStatus.FAILED),
             ("ERROR", PaymentStatus.FAILED),
             ("CANCEL", PaymentStatus.CANCELED),
-            ("OTHER", PaymentStatus.UNKNOWN),
         ],
     )
     def test_maps_decisions(self, decision: str, status: PaymentStatus) -> None:
@@ -150,11 +151,48 @@ class TestCyberSource:
             result(signed_field_names="decision,signed_field_names"),
             {"signed_field_names": "decision,missing", "decision": "ACCEPT", "signature": "x"},
             {"signed_field_names": ",", "signature": "x"},
+            result(decision="OTHER"),
+            result(decision=""),
+            result(signed_field_names="decision,req_reference_number,req_amount"),
+            result(signed_field_names="decision,req_reference_number,,signed_field_names"),
+            result(signed_field_names="decision,decision,req_reference_number,signed_field_names"),
+            {
+                **result(),
+                "a=b": "c",
+                "signed_field_names": "decision,req_reference_number,a=b,signed_field_names",
+            },
         ],
     )
     def test_rejects_unsigned_or_tampered_results(self, fields: dict[str, str]) -> None:
         with pytest.raises(SignatureVerificationError, match="CyberSource callback signature"):
             gateway.handle_callback(CallbackRequest(body=urlencode(fields)))
+
+    def test_rejects_a_signed_value_re_partitioned_into_an_accept(self) -> None:
+        # The customer typed "x,decision=ACCEPT,req_x=y" as a name echoed back signed
+        # next to a DECLINE; an unsigned list re-partitions the same signed text.
+        genuine = result(
+            req_bill_to_forename="x,decision=ACCEPT,req_x=y",
+            decision="DECLINE",
+            signed_field_names="req_bill_to_forename,decision,req_reference_number,signed_field_names",
+        )
+        assert gateway.handle_callback(CallbackRequest(body=urlencode(genuine))).status is (
+            PaymentStatus.FAILED
+        )
+        forged = {
+            "req_bill_to_forename": "x",
+            "decision": "ACCEPT",
+            "req_x": "y,decision=DECLINE",
+            "req_reference_number": (
+                "ORDER_1,signed_field_names="
+                "req_bill_to_forename,decision,req_reference_number,signed_field_names"
+            ),
+            "signed_field_names": "req_bill_to_forename,decision,req_x,req_reference_number",
+        }
+        assert sign(forged) == genuine["signature"]
+        with pytest.raises(SignatureVerificationError, match="CyberSource callback signature"):
+            gateway.handle_callback(
+                CallbackRequest(body=urlencode({**forged, "signature": genuine["signature"]}))
+            )
 
     def test_rejects_a_decision_added_next_to_signed_request_fields(self) -> None:
         fields = result(signed_field_names="req_reference_number,req_amount,signed_field_names")

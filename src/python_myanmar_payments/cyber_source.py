@@ -250,18 +250,23 @@ class CyberSource:
         """Verifies CyberSource's result post.
 
         The same check works for the browser post to your receipt page. Only the
-        fields listed in ``signed_field_names`` are trusted: ``decision`` and
-        ``req_reference_number`` must be signed, and unsigned fields are left out
-        of the result and ``raw``.
+        fields listed in ``signed_field_names`` are trusted: ``decision``,
+        ``req_reference_number`` and ``signed_field_names`` itself must be signed,
+        and unsigned fields are left out of the result and ``raw``. ``decision``
+        must be ACCEPT, DECLINE, REVIEW, ERROR or CANCEL.
         """
         payload = lossless_input(request)
         expected = self._sign(payload)
-        names = _signed_names(payload)
+        names = _signed_names(payload) or []
+        # The signed text joins `name=value` pairs with ",", so a list that does
+        # not sign itself could re-partition a value holding ",decision=ACCEPT".
         if (
             expected is None
             or not safe_equal(expected, get(payload, "signature"))
             or "decision" not in names
             or "req_reference_number" not in names
+            or "signed_field_names" not in names
+            or trimmed(payload, "decision").upper() not in _STATUSES
         ):
             raise SignatureVerificationError(
                 "CyberSource callback signature verification failed.", to_plain_object(payload)
@@ -284,17 +289,24 @@ class CyberSource:
 
     def _sign(self, fields: Mapping[str, object]) -> str | None:
         """Signs the fields listed in ``signed_field_names``; ``None`` when one is missing."""
+        names = _signed_names(fields)
+        if not names:
+            return None
         pairs = []
-        for name in _signed_names(fields):
+        for name in names:
             value = scalar_string(fields.get(name))
             if value is None:
                 return None
             pairs.append(f"{name}={value}")
-        if not pairs:
-            return None
         return hmac_sha256_base64(self.config.secret_key, ",".join(pairs))
 
 
-def _signed_names(fields: Mapping[str, object]) -> list[str]:
-    """The names listed in ``signed_field_names``, in order."""
-    return [name for name in get(fields, "signed_field_names").split(",") if name != ""]
+def _signed_names(fields: Mapping[str, object]) -> list[str] | None:
+    """The names listed in ``signed_field_names``, in order.
+
+    ``None`` when the list is empty or has an empty, repeated or ``=`` holding name.
+    """
+    names = get(fields, "signed_field_names").split(",")
+    if any(name == "" or "=" in name for name in names) or len(set(names)) != len(names):
+        return None
+    return names
