@@ -61,7 +61,7 @@ return redirect(payment.url)
 ```
 
 - `RedirectPayment` (`url`) from `kbz.pwa(data)` and `wave.initiate(data)`. Wave fills `data.merchant_reference_id` when empty; store it. `WaveMoneyPaymentData` also takes optional `merchant_name` and `time_to_live_seconds` (an `int` greater than 0) to override the configured values for one payment; a time to live must come from the payment or the config.
-- `FormPayment` from `aya.initiate(data)` and `cyber_source.initiate(data)` (no network call, never awaited): return `payment.to_html()` as an auto-submitting page, or render `action`, `fields` and `enctype` yourself.
+- `FormPayment` from `aya.initiate(data)` and `cyber_source.initiate(data)` (no network call, never awaited): return `payment.to_html()` as an auto-submitting page (`payment.to_html(nonce)` adds your Content Security Policy nonce to its inline script), or render `action`, `fields` and `enctype` yourself.
 - `QrPayment` from `kbz.qr(data)` (encode `qr_string`) and `yoma.initiate(data)` (`qr_image_data_uri()`, `expires_at`, `reference`). A Yoma QR lives `YomaMmqr.QR_LIFETIME_SECONDS` (120); renew it with `yoma.renew_qr(order_id)`.
 - `AppPayment` from `kbz.app(data)`: send `payment.to_dict()` (`orderId`, `orderInfo`, `sign`, `signType`) to your mobile app.
 
@@ -91,6 +91,7 @@ return HttpResponse(ack.body, status=ack.status, headers=ack.headers)
 
 - Give the package the raw body bytes, the headers and the query string; `handle_callback()` and `verify_redirect()` are plain methods on the async classes too.
 - Check AYA's browser return with `aya.verify_redirect(request)`.
+- Yoma MMQR signs only the order number and status, so its callback has no `amount`; confirm the amount with `yoma.status(reference)` before fulfilling.
 - For production, store the verified callback, acknowledge immediately, then process it once in the background.
 
 ### Check status and handle errors
