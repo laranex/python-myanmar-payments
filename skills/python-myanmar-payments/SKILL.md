@@ -91,7 +91,7 @@ return HttpResponse(ack.body, status=ack.status, headers=ack.headers)
 
 - Give the package the raw body bytes, the headers and the query string; `handle_callback()` and `verify_redirect()` are plain methods on the async classes too.
 - Check AYA's browser return with `aya.verify_redirect(request)`.
-- Yoma MMQR signs only the order number and status, so its callback has no `amount`; confirm the amount with `yoma.status(reference)` before fulfilling.
+- Yoma MMQR signs only the order number and status, so its callback has no `amount`: match the order number to your stored order (its QR was generated for the stored amount) and, to confirm, call `yoma.status(reference)` with that order's QR reference (`refLabel`). The status result has no amount either, so trust your stored amount.
 - For production, store the verified callback, acknowledge immediately, then process it once in the background.
 
 ### Check status and handle errors
