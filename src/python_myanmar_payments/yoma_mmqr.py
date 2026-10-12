@@ -202,6 +202,10 @@ class _YomaMmqrBase:
 
         The hash is HMAC-SHA256 of ``orderNumber=..&status=..`` keyed with the
         order number followed by the webhook hash key.
+
+        Only the order number and status are signed: the callback carries no
+        amount, so the result's ``amount`` is ``None``. Confirm the amount with
+        ``status()`` before fulfilling the order.
         """
         payload = lossless_body(request)
 
