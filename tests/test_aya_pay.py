@@ -67,10 +67,27 @@ def signed(payload: dict[str, Any] | None = None) -> dict[str, str]:
         "currenyCode",
         "statusCode",
         "tranRef",
+        "userRef1",
         "description",
+        "dateTime",
     ]
     parts = [str(payload[name]) for name in names if name in payload]
     return {"payload": encode(payload), "checkSum": hmac_hex(":".join(parts), SECRET)}
+
+
+def result(**changes: Any) -> dict[str, Any]:
+    """A complete callback payload with ``changes``; a ``None`` value leaves a field out."""
+    values: dict[str, Any] = {
+        "merchOrderId": "ORDER1",
+        "tranId": "T1",
+        "amount": "1000",
+        "currenyCode": "104",
+        "statusCode": "00",
+        "description": "Order 1",
+        "dateTime": "2026-10-07 10:00:00",
+        **changes,
+    }
+    return {name: value for name, value in values.items() if value is not None}
 
 
 class TestAyaPay:
@@ -212,11 +229,16 @@ class TestAyaPay:
         assert result.amount == "1000"
         assert result.raw["paymentCardNumber"] is None
 
-    def test_keeps_the_queried_order_id_when_the_payload_has_none(self, mode: str) -> None:
-        server = FakeServer({"status": "00", "data": signed({"statusCode": "01"})})
-        result = run(gateway(mode, server).status("ORDER999"))
-        assert result.order_id == "ORDER999"
-        assert result.status is PaymentStatus.PENDING
+    def test_reads_a_pending_enquiry(self, mode: str) -> None:
+        server = FakeServer({"status": "00", "data": signed(result(statusCode="01"))})
+        status = run(gateway(mode, server).status("ORDER1"))
+        assert status.order_id == "ORDER1"
+        assert status.status is PaymentStatus.PENDING
+
+    def test_rejects_an_enquiry_response_without_a_transaction_id(self, mode: str) -> None:
+        server = FakeServer({"status": "00", "data": signed(result(tranId=None))})
+        with pytest.raises(SignatureVerificationError, match="enquiry response"):
+            run(gateway(mode, server).status("ORDER1"))
 
     def test_rejects_an_unsigned_enquiry_response(self, mode: str) -> None:
         with pytest.raises(SignatureVerificationError, match="enquiry response"):
@@ -255,7 +277,7 @@ class TestAyaPay:
         ],
     )
     def test_maps_status_codes(self, code: str, status: PaymentStatus) -> None:
-        request = CallbackRequest.from_json(signed({"merchOrderId": "O1", "statusCode": code}))
+        request = CallbackRequest.from_json(signed(result(statusCode=code)))
         assert gateway("sync").handle_callback(request).status is status
 
     def test_verifies_the_return_redirect_with_plus_signs_turned_into_spaces(self) -> None:
@@ -287,9 +309,73 @@ class TestAyaPay:
         with pytest.raises(SignatureVerificationError, match="AYA Pay callback checksum"):
             gateway("sync").handle_callback(CallbackRequest.from_json(values))
 
+    def test_rejects_a_failed_payment_re_split_to_read_successful(self) -> None:
+        # A genuine failed callback: its dateTime ends in ":00", so the signed text
+        # also splits into a "00" status when the values before it are shifted.
+        genuine = signed(result(statusCode="02", description="Order 1"))
+        assert (
+            not gateway("sync").handle_callback(CallbackRequest.from_json(genuine)).is_successful()
+        )
+        forged = result(
+            currenyCode="104:02:Order 1:2026-10-07 10",
+            statusCode="00",
+            description=None,
+            dateTime="00",
+        )
+        values = {"payload": encode(forged), "checkSum": genuine["checkSum"]}
+        assert signed(forged)["checkSum"] == genuine["checkSum"]
+        with pytest.raises(SignatureVerificationError, match="AYA Pay callback checksum"):
+            gateway("sync").handle_callback(CallbackRequest.from_json(values))
+
+    @pytest.mark.parametrize(
+        "changes",
+        [
+            {"merchOrderId": None},
+            {"merchOrderId": ""},
+            {"tranId": None},
+            {"amount": None},
+            {"amount": " "},
+            {"currenyCode": None},
+            {"statusCode": None},
+            {"statusCode": "0"},
+            {"statusCode": "000"},
+            {"statusCode": "0a"},
+            {"currenyCode": "840"},
+            {"currenyCode": "1040"},
+            {"amount": "-1000"},
+            {"amount": "1e3"},
+            {"amount": "1000."},
+            {"amount": "1,000"},
+            {"description": "Order: 1"},
+            {"userRef1": "a:b"},
+            {"merchOrderId": "ORDER:1"},
+            {"dateTime": "2026-10-07T10:00:00"},
+            {"dateTime": "2026-10-07 10:00"},
+            {"dateTime": "10:00:00"},
+        ],
+    )
+    def test_rejects_signed_callbacks_with_missing_or_malformed_values(
+        self, mode: str, changes: dict[str, Any]
+    ) -> None:
+        values = signed(result(**changes))
+        with pytest.raises(SignatureVerificationError, match="AYA Pay callback checksum"):
+            gateway(mode).handle_callback(CallbackRequest.from_json(values))
+        with pytest.raises(SignatureVerificationError, match="AYA Pay redirect checksum"):
+            gateway(mode).verify_redirect(CallbackRequest(query=urlencode(values)))
+
+    def test_accepts_a_payload_without_a_date_time_and_the_currency_code_spelling(self) -> None:
+        payload = result(dateTime=None, currenyCode=None, currencyCode="104")
+        names = ["merchOrderId", "tranId", "amount", "currencyCode", "statusCode", "description"]
+        checksum = hmac_hex(":".join(payload[name] for name in names), SECRET)
+        values = {"payload": encode(payload), "checkSum": checksum}
+        assert gateway("sync").handle_callback(CallbackRequest.from_json(values)).is_successful()
+
     @pytest.mark.parametrize(
         ("change", "field"),
         [
+            ({"order_id": "ORDER:123"}, "order_id"),
+            ({"description": "Order: 123"}, "description"),
+            ({"user_refs": ["ok", "a:b"]}, "user_refs"),
             ({"order_id": "ORD1"}, "order_id"),
             ({"order_id": "O" * 41}, "order_id"),
             ({"order_id": ""}, "order_id"),

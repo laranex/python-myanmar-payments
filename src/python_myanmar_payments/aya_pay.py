@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -199,6 +200,11 @@ _PAYLOAD_FIELDS = (
     "dateTime",
 )
 
+_REQUIRED_FIELDS = ("merchOrderId", "tranId", "amount", "currencyCode", "statusCode")
+_STATUS_CODE = re.compile(r"[0-9]{2}")
+_AMOUNT = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+_DATE_TIME = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}")
+
 
 @dataclass(frozen=True)
 class _Call:
@@ -237,6 +243,8 @@ class _AyaPayBase:
             .string("return_url", data.return_url)
             .url("return_url", data.return_url)
             .string("description", data.description)
+            .when(_has_colon(data.order_id), "order_id", _NO_COLON.format("order_id"))
+            .when(_has_colon(data.description), "description", _NO_COLON.format("description"))
             .when(
                 user_refs is not None
                 and (
@@ -249,6 +257,11 @@ class _AyaPayBase:
                 refs_are_list and len(user_refs) > 5,  # type: ignore[arg-type]
                 "user_refs",
                 "The user_refs field must not have more than 5 items.",
+            )
+            .when(
+                refs_are_list and any(_has_colon(ref) for ref in user_refs),  # type: ignore[attr-defined]
+                "user_refs",
+                _NO_COLON.format("user_refs"),
             )
             .validate()
         )
@@ -372,14 +385,12 @@ class _AyaPayBase:
             )
         return services
 
-    def _status_result(
-        self, call: _Call, response: GatewayResponse, order_id: str
-    ) -> PaymentStatusResult:
+    def _status_result(self, call: _Call, response: GatewayResponse) -> PaymentStatusResult:
         body = self._body(call, response)
         payload = self._verified_payload(object_at(body, "data") or {}, "enquiry response")
         status_code = trimmed(payload, "statusCode")
         return PaymentStatusResult(
-            order_id=optional(payload, "merchOrderId") or order_id,
+            order_id=get(payload, "merchOrderId"),
             status=resolve_status(_STATUSES, status_code),
             gateway_status=status_code,
             gateway_reference=optional(payload, "tranId"),
@@ -402,20 +413,51 @@ class _AyaPayBase:
         if payload is None:
             raise fail()
 
+        # The checksum joins the values with ":", so a value holding a ":" could be
+        # re-split into other fields (e.g. a "02" status into "00"). Only dateTime
+        # may hold one, and only in AYA's date and time format.
         parts: list[str] = []
+        values: dict[str, str] = {}
         for name in _PAYLOAD_FIELDS:
             key = "currenyCode" if name == "currencyCode" and "currenyCode" in payload else name
             if key in payload:
                 if is_nested(payload[key]):
                     raise fail()
-                parts.append(scalar_string(payload[key]) or "")
+                text = scalar_string(payload[key]) or ""
+                if ":" in text and name != "dateTime":
+                    raise fail()
+                parts.append(text)
+                values[name] = text
 
-        if not safe_equal(self._checksum(parts), get(data, "checkSum").lower()):
+        if not _well_formed(values) or not safe_equal(
+            self._checksum(parts), get(data, "checkSum").lower()
+        ):
             raise fail()
         return payload
 
     def _checksum(self, parts: Sequence[str]) -> str:
         return hmac_sha256_hex(self.config.app_secret, ":".join(parts))
+
+
+_NO_COLON = "The {} field must not contain a colon (:)."
+
+
+def _has_colon(value: object) -> bool:
+    """Whether ``value`` is text holding a ":", which AYA's checksum uses as separator."""
+    return isinstance(value, str) and ":" in value
+
+
+def _well_formed(values: Mapping[str, str]) -> bool:
+    """Whether the signed values hold every field a result needs, in AYA's formats."""
+    if any(values.get(name, "") == "" for name in _REQUIRED_FIELDS):
+        return False
+    date_time = values.get("dateTime")
+    return (
+        _STATUS_CODE.fullmatch(values["statusCode"]) is not None
+        and values["currencyCode"] == _CURRENCY_MMK
+        and _AMOUNT.fullmatch(values["amount"]) is not None
+        and (date_time is None or _DATE_TIME.fullmatch(date_time) is not None)
+    )
 
 
 def _to_callback(payload: LosslessObject) -> PaymentCallback:
@@ -465,7 +507,7 @@ class AyaPay(_AyaPayBase, SyncGateway):
     def status(self, order_id: str) -> PaymentStatusResult:
         """Asks AYA for the current state of an order (enquiry)."""
         call = self._status_call(order_id)
-        return self._status_result(call, self._transport.send(call.request), order_id)
+        return self._status_result(call, self._transport.send(call.request))
 
 
 class AsyncAyaPay(_AyaPayBase, AsyncGateway):
@@ -501,4 +543,4 @@ class AsyncAyaPay(_AyaPayBase, AsyncGateway):
     async def status(self, order_id: str) -> PaymentStatusResult:
         """Asks AYA for the current state of an order (enquiry)."""
         call = self._status_call(order_id)
-        return self._status_result(call, await self._transport.send(call.request), order_id)
+        return self._status_result(call, await self._transport.send(call.request))
