@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
@@ -202,6 +203,12 @@ _CALLBACK_FIELDS = (
 
 _RULE = AmountRule("Wave Money", 0)
 
+# Wave's hash concatenates the values with no separator, so a verified callback
+# must also hold values in their expected formats.
+_ID = re.compile(r"[A-Za-z0-9_-]+")
+_ID_DESCRIPTION = "letters, numbers, underscores and dashes"
+_AMOUNT = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+
 
 class _WaveMoneyBase:
     """What the sync and async Wave Money clients share."""
@@ -241,6 +248,7 @@ class _WaveMoneyBase:
         validator = (
             Validator()
             .required("order_id", data.order_id)
+            .pattern("order_id", data.order_id, _ID, _ID_DESCRIPTION)
             .required("callback_url", data.callback_url)
             .url("callback_url", data.callback_url)
             .required("return_url", data.return_url)
@@ -248,6 +256,7 @@ class _WaveMoneyBase:
             .required("description", data.description)
             .when(len(items) == 0, "items", "The items field must have at least one item.")
             .string("merchant_reference_id", data.merchant_reference_id)
+            .pattern("merchant_reference_id", data.merchant_reference_id, _ID, _ID_DESCRIPTION)
             .positive("time_to_live_seconds", data.time_to_live_seconds)
         )
         if data.merchant_name is not None:
@@ -265,7 +274,10 @@ class _WaveMoneyBase:
         """Verifies Wave's callback. Only ``PAYMENT_CONFIRMED`` means the customer paid.
 
         ``order_id`` falls back to ``merchantReferenceId`` when ``orderId`` is
-        missing, null or empty, because Wave marks ``orderId`` as optional.
+        missing, null or empty, because Wave marks ``orderId`` as optional. A
+        callback whose amount is not a non-negative decimal, or whose ``orderId`` or
+        ``merchantReferenceId`` holds anything but letters, numbers, ``_`` and
+        ``-``, fails verification too.
         """
         payload = lossless_body(request)
         nested = any(is_nested(payload.get(name)) for name in _CALLBACK_FIELDS)
@@ -276,10 +288,15 @@ class _WaveMoneyBase:
         expected = self._hash(parts)
         hash_value = payload.get("hashValue")
 
+        order_id = get(payload, "orderId")
+        reference_id = get(payload, "merchantReferenceId")
         if (
             nested
             or not isinstance(hash_value, str)
             or not safe_equal(expected, hash_value.lower())
+            or _AMOUNT.fullmatch(get(payload, "amount")) is None
+            or (order_id or reference_id) == ""
+            or any(_ID.fullmatch(value) is None for value in (order_id, reference_id) if value)
         ):
             raise SignatureVerificationError(
                 "Wave Money callback hash verification failed.", to_plain_object(payload)
@@ -287,7 +304,7 @@ class _WaveMoneyBase:
 
         gateway_status = trimmed(payload, "status")
         return PaymentCallback(
-            order_id=get(payload, "orderId") or get(payload, "merchantReferenceId"),
+            order_id=order_id or reference_id,
             status=resolve_status(_STATUSES, gateway_status),
             gateway_status=gateway_status,
             gateway_reference=optional(payload, "transactionId"),

@@ -182,7 +182,10 @@ class TestWaveMoney:
             ({"amount": "10.50"}, "amount"),
             ({"amount": 0}, "amount"),
             ({"items": [], "amount": None}, "amount"),
+            ({"order_id": "ORDER 1"}, "order_id"),
+            ({"order_id": "ORDER:1"}, "order_id"),
             ({"merchant_reference_id": 5}, "merchant_reference_id"),
+            ({"merchant_reference_id": "ref/1"}, "merchant_reference_id"),
             ({"merchant_name": ""}, "merchant_name"),
             ({"merchant_name": " "}, "merchant_name"),
             ({"merchant_name": 5}, "merchant_name"),
@@ -270,6 +273,57 @@ class TestWaveMoney:
         assert info.value.raw["amount"] == "1"
         with pytest.raises(SignatureVerificationError, match="Wave Money callback hash"):
             gateway("sync").handle_callback(CallbackRequest.from_json(vector["payload"]))
+
+    @pytest.mark.parametrize(
+        "changes",
+        [
+            {"amount": None},
+            {"amount": ""},
+            {"amount": "-1000"},
+            {"amount": "1e3"},
+            {"amount": "1000."},
+            {"amount": "10,00"},
+            {"orderId": "100 1"},
+            {"orderId": "", "merchantReferenceId": ""},
+            {"orderId": None, "merchantReferenceId": None},
+            {"merchantReferenceId": "ref:001"},
+            {"orderId": None, "merchantReferenceId": "ref 001"},
+        ],
+    )
+    def test_rejects_hashed_callbacks_with_malformed_values(
+        self, mode: str, changes: dict[str, Any]
+    ) -> None:
+        names = [
+            "status",
+            "timeToLiveSeconds",
+            "merchantId",
+            "orderId",
+            "amount",
+            "backendResultUrl",
+            "merchantReferenceId",
+            "initiatorMsisdn",
+            "transactionId",
+            "paymentRequestId",
+            "requestTime",
+        ]
+        payload = {**fixture("wave_money/callback.json")["payload"], **changes}
+        text = "".join(
+            "null" if payload.get(name) is None else str(payload[name]) for name in names
+        )
+        payload["hashValue"] = hmac_hex(text, "test-secret")
+        with pytest.raises(SignatureVerificationError, match="Wave Money callback hash"):
+            gateway(mode).handle_callback(CallbackRequest.from_json(payload))
+
+    def test_accepts_dashes_and_underscores_in_the_ids(self) -> None:
+        vector = fixture("wave_money/callback.json")
+        hash_string = vector["hash_string"].replace("100", "ORDER_1-a", 1)
+        payload = {
+            **vector["payload"],
+            "orderId": "ORDER_1-a",
+            "hashValue": hmac_hex(hash_string, "test-secret"),
+        }
+        callback = gateway("sync").handle_callback(CallbackRequest.from_json(payload))
+        assert callback.order_id == "ORDER_1-a"
 
 
 class TestWaveMoneyConfig:
