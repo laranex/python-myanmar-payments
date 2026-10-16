@@ -1975,6 +1975,46 @@
             {
                 "url": "http://[::1]:/cb",
                 "valid": false
+            },
+            {
+                "url": "https://a%40b@shop.test/",
+                "valid": true
+            },
+            {
+                "url": "https://a%zzb@shop.test/",
+                "valid": false
+            },
+            {
+                "url": "https://a\"b@shop.test/",
+                "valid": false
+            },
+            {
+                "url": "https://a{b@shop.test/",
+                "valid": false
+            },
+            {
+                "url": "https://a:b:c@shop.test/",
+                "valid": true
+            },
+            {
+                "url": "https://a!$&()*+,;=._~-@shop.test/",
+                "valid": true
+            },
+            {
+                "url": "https://[fe80::1%eth0]/",
+                "valid": false
+            },
+            {
+                "url": "https://[fe80::1%25eth0]/",
+                "valid": false
+            },
+            {
+                "url": "https://a@b@shop.test/",
+                "valid": false
+            },
+            {
+                "url": "https://@shop.test/",
+                "valid": true
             }
         ]
     },

@@ -162,7 +162,7 @@ class Validator:
 _PRINTABLE_ASCII = re.compile(r"[\x21-\x7e]+")
 _HTTP_URL = re.compile(
     r"(?i:https?)://"
-    r"(?:[^/?#@]*@)?"  # User info.
+    r"(?:(?:[A-Za-z0-9\-._~!$&'()*+,;=:]|%[0-9A-Fa-f]{2})*@)?"  # User info.
     r"(?P<host>\[[^\]/?#]*\]|[^:/?#\[\]]*)"
     r"(?::(?P<port>[^/?#]*))?"
     r"(?:[/?#].*)?",
@@ -175,7 +175,7 @@ def is_http_url(value: str) -> bool:
     """Whether ``value`` is an http or https URL, checked like PHP's ``FILTER_VALIDATE_URL``.
 
     Printable ASCII only (no whitespace or control characters); ``http://`` or
-    ``https://`` in any case followed by a host: a bracketed IP literal, or
+    ``https://`` in any case followed by a host: a bracketed IPv6 literal, or
     dot-separated labels of letters, digits and inner ``-`` (1 to 63 characters
     each, at most 253 in all, one trailing dot allowed). A port is 0 to 65535.
     User info, path, query and fragment may hold any printable ASCII.
@@ -202,6 +202,8 @@ def _is_hostname(host: str) -> bool:
 
 
 def _is_ip_literal(address: str) -> bool:
+    if "%" in address:
+        return False
     try:
         ipaddress.IPv6Address(address)
     except ValueError:

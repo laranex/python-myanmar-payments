@@ -65,7 +65,7 @@ return redirect(payment.url)
 - `QrPayment` from `kbz.qr(data)` (encode `qr_string`) and `yoma.initiate(data)` (`qr_image_data_uri()`, `expires_at`, `reference`). A Yoma QR lives `YomaMmqr.QR_LIFETIME_SECONDS` (120); renew it with `yoma.renew_qr(order_id)`.
 - `AppPayment` from `kbz.app(data)`: send `payment.to_dict()` (`orderId`, `orderInfo`, `sign`, `signType`) to your mobile app.
 
-AYA needs a channel: `aya.services()` lists `AyaPayService` entries (`key`, `supports(method)`), then `aya.initiate(AyaPayPaymentData(order_id="ORDER123", amount=1000, channel="kbz_pay", method=AyaPayMethod.QR))`.
+AYA needs a channel: `aya.services()` lists `AyaPayService` entries (`key`, `supports(method)`), then `aya.initiate(AyaPayPaymentData(order_id="ORDER123", amount=1000, channel="kbz_pay", method=AyaPayMethod.QR))`. AYA's `order_id`, `description` and `user_refs` must not contain `:`.
 
 ### Handle the callback
 
@@ -90,6 +90,7 @@ return HttpResponse(ack.body, status=ack.status, headers=ack.headers)
 ```
 
 - Give the package the raw body bytes, the headers and the query string; `handle_callback()` and `verify_redirect()` are plain methods on the async classes too.
+- `SignatureVerificationError` covers both a bad signature (`... verification failed.`) and a signed callback with malformed values (`... is malformed.`); answer both with a 400.
 - Check AYA's browser return with `aya.verify_redirect(request)`.
 - Yoma MMQR signs only the order number and status, so its callback has no `amount`: match the order number to your stored order (its QR was generated for the stored amount) and, to confirm, call `yoma.status(reference)` with that order's QR reference (`refLabel`). The status result has no amount either, so trust your stored amount.
 - For production, store the verified callback, acknowledge immediately, then process it once in the background.
@@ -98,6 +99,7 @@ return HttpResponse(ack.body, status=ack.status, headers=ack.headers)
 
 - `kbz.status(order_id)`, `aya.status(order_id)` and `yoma.status(reference)` return `PaymentStatusResult` with `status` and `is_successful()`. Wave Pay and CyberSource have no status API.
 - Statuses: `PaymentStatus.SUCCESSFUL`, `PENDING`, `FAILED`, `CANCELED`, `EXPIRED`, `UNKNOWN`; `status.is_final()`.
+- Redirects are never followed: a 3xx response is a failure like any other non-2xx one.
 - Gateway failures raise `ApiError` (`gateway_code`, `gateway_message`, `http_status`, `raw`; network errors are chained as `__cause__`). All errors extend `PaymentError`.
 
 ## Test your app
