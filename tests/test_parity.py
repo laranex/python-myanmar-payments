@@ -116,8 +116,6 @@ def test_amount_equals(case: dict[str, Any]) -> None:
 
 def urls(config: Any) -> dict[str, str]:
     names = ("api_url", "pwa_url") if isinstance(config, KbzPayConfig) else ("base_url",)
-    if isinstance(config, WaveMoneyConfig):
-        names = ("base_url", "authenticate_url")
     return {name: getattr(config, name) for name in names}
 
 

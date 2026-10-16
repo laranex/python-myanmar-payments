@@ -79,7 +79,7 @@ class TestWaveMoney:
             ),
         }
         assert payment.flow == "redirect"
-        assert payment.url == "https://payments.wavemoney.io/authenticate?transaction_id=TX+1"
+        assert payment.url == "https://wave.test/authenticate?transaction_id=TX+1"
         assert payment.gateway_reference == "TX 1"
         assert payment.raw == SUCCESS
 
@@ -330,7 +330,6 @@ class TestWaveMoneyConfig:
     def test_defaults_to_the_production_hosts(self) -> None:
         config = WaveMoneyConfig(**{**CONFIG, "base_url": None})
         assert config.base_url == "https://payments.wavemoney.io"
-        assert config.authenticate_url == "https://payments.wavemoney.io"
         assert config.time_to_live_seconds == 300
         assert config.timeout_seconds == 30
         assert repr(config) == "WaveMoneyConfig(merchant_id='testmerchantID')"
@@ -363,14 +362,12 @@ class TestWaveMoneyConfig:
             "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS": " 600 ",
             "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "20",
             "WAVE_MONEY_BASE_URL": "https://api.wave.test/",
-            "WAVE_MONEY_AUTHENTICATE_URL": "https://pay.wave.test/",
         }
         config = WaveMoneyConfig.from_env(env)
         assert config.merchant_name == "My Shop"
         assert config.time_to_live_seconds == 600
         assert config.timeout_seconds == 20
         assert config.base_url == "https://api.wave.test"
-        assert config.authenticate_url == "https://pay.wave.test"
         env_with_name = {**env, "WAVE_MONEY_MERCHANT_NAME": "Wave Shop"}
         cls = WaveMoney if mode == "sync" else AsyncWaveMoney
         assert cls.from_env(env_with_name).config.merchant_name == "Wave Shop"

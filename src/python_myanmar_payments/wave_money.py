@@ -65,7 +65,6 @@ class WaveMoneyConfig:
     """
 
     PRODUCTION_URL: ClassVar[str] = "https://payments.wavemoney.io"
-    PRODUCTION_AUTHENTICATE_URL: ClassVar[str] = "https://payments.wavemoney.io"
 
     merchant_id: str
     """The merchant ID Wave issued."""
@@ -80,9 +79,8 @@ class WaveMoneyConfig:
     timeout_seconds: int
     """Seconds before the default HTTP client gives up on a request (default 30)."""
     base_url: str
-    """The API base URL in use."""
-    authenticate_url: str
-    """The host the customer is redirected to. Wave serves it without the API port."""
+    """The API base URL in use: payments are requested at its ``/payment`` and the
+    customer is sent to its ``/authenticate``."""
 
     def __init__(
         self,
@@ -93,7 +91,6 @@ class WaveMoneyConfig:
         time_to_live_seconds: int | str | None = None,
         timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
         base_url: str | None = None,
-        authenticate_url: str | None = None,
     ) -> None:
         self.merchant_id = require_setting("wave_money", "merchant_id", merchant_id)
         self.secret_key = require_setting("wave_money", "secret_key", secret_key)
@@ -109,9 +106,6 @@ class WaveMoneyConfig:
         self.time_to_live_seconds = ttl
         self.timeout_seconds = read_timeout("wave_money", timeout_seconds)
         self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
-        self.authenticate_url = trim_url(
-            optional_setting(authenticate_url) or self.PRODUCTION_AUTHENTICATE_URL
-        )
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> WaveMoneyConfig:
@@ -119,8 +113,8 @@ class WaveMoneyConfig:
 
         ``WAVE_MONEY_MERCHANT_ID``, ``WAVE_MONEY_SECRET_KEY``,
         ``WAVE_MONEY_MERCHANT_NAME``, ``WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS``,
-        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``, ``WAVE_MONEY_BASE_URL`` and
-        ``WAVE_MONEY_AUTHENTICATE_URL``. Defaults to ``os.environ``.
+        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT`` and ``WAVE_MONEY_BASE_URL``. Defaults to
+        ``os.environ``.
         """
         env = default_env() if env is None else env
         return cls(
@@ -130,7 +124,6 @@ class WaveMoneyConfig:
             time_to_live_seconds=env_first(env, "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS"),
             timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
             base_url=env_first(env, "WAVE_MONEY_BASE_URL"),
-            authenticate_url=env_first(env, "WAVE_MONEY_AUTHENTICATE_URL"),
         )
 
     def __repr__(self) -> str:
@@ -379,7 +372,7 @@ class _WaveMoneyBase:
             )
         return RedirectPayment(
             order_id=data.order_id,
-            url=f"{self.config.authenticate_url}/authenticate?transaction_id="
+            url=f"{self.config.base_url}/authenticate?transaction_id="
             f"{query_escape(transaction_id)}",
             gateway_reference=transaction_id,
             raw=to_plain_object(body),

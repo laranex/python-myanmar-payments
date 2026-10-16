@@ -515,8 +515,7 @@
                 "pwa_url": "https://wap.kbzpay.com/pgw/pwa/#/"
             },
             "wave_money": {
-                "base_url": "https://payments.wavemoney.io",
-                "authenticate_url": "https://payments.wavemoney.io"
+                "base_url": "https://payments.wavemoney.io"
             },
             "aya_pay": {
                 "base_url": "https://pgw.ayainnovation.com"
@@ -533,7 +532,6 @@
                 "KBZ_PAY_BASE_URL": "http://api-uat.kbzpay.com/payment/gateway/uat",
                 "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://static.kbzpay.com/pgw/uat/pwa/#/",
                 "WAVE_MONEY_BASE_URL": "https://preprodpayments.wavemoney.io:8107",
-                "WAVE_MONEY_AUTHENTICATE_URL": "https://preprodpayments.wavemoney.io",
                 "AYA_PAY_BASE_URL": "https://uat-pgw.ayainnovation.com",
                 "YOMA_MMQR_BASE_URL": "https://devapi.yomabank.net",
                 "CYBER_SOURCE_BASE_URL": "https://testsecureacceptance.cybersource.com"
@@ -544,8 +542,7 @@
                     "pwa_url": "https://static.kbzpay.com/pgw/uat/pwa/#/"
                 },
                 "wave_money": {
-                    "base_url": "https://preprodpayments.wavemoney.io:8107",
-                    "authenticate_url": "https://preprodpayments.wavemoney.io"
+                    "base_url": "https://preprodpayments.wavemoney.io:8107"
                 },
                 "aya_pay": {
                     "base_url": "https://uat-pgw.ayainnovation.com"
