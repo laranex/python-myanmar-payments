@@ -88,15 +88,15 @@ class AyaPayConfig:
         """Reads the ``AYA_PAY_*`` environment variables.
 
         ``AYA_PAY_APP_KEY``, ``AYA_PAY_APP_SECRET``, ``AYA_PAY_BASE_URL`` and
-        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``, falling back to the ``AYA_PGW_*`` names.
+        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``.
         Defaults to ``os.environ``.
         """
         env = default_env() if env is None else env
         return cls(
-            app_key=env_first(env, "AYA_PAY_APP_KEY", "AYA_PGW_APP_KEY"),
-            app_secret=env_first(env, "AYA_PAY_APP_SECRET", "AYA_PGW_APP_SECRET"),
+            app_key=env_first(env, "AYA_PAY_APP_KEY"),
+            app_secret=env_first(env, "AYA_PAY_APP_SECRET"),
             timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
-            base_url=env_first(env, "AYA_PAY_BASE_URL", "AYA_PGW_BASE_URL"),
+            base_url=env_first(env, "AYA_PAY_BASE_URL"),
         )
 
     def __repr__(self) -> str:
@@ -496,7 +496,7 @@ class AyaPay(_AyaPayBase, SyncGateway):
         *,
         http_client: httpx.Client | None = None,
     ) -> AyaPay:
-        """A gateway configured from the ``AYA_PAY_*`` (or ``AYA_PGW_*``) variables."""
+        """A gateway configured from the ``AYA_PAY_*`` variables."""
         return cls(AyaPayConfig.from_env(env), http_client=http_client)
 
     def services(self) -> list[AyaPayService]:
@@ -532,7 +532,7 @@ class AsyncAyaPay(_AyaPayBase, AsyncGateway):
         *,
         http_client: httpx.AsyncClient | None = None,
     ) -> AsyncAyaPay:
-        """A gateway configured from the ``AYA_PAY_*`` (or ``AYA_PGW_*``) variables."""
+        """A gateway configured from the ``AYA_PAY_*`` variables."""
         return cls(AyaPayConfig.from_env(env), http_client=http_client)
 
     async def services(self) -> list[AyaPayService]:

@@ -411,20 +411,20 @@ class TestAyaPayConfig:
         assert info.value.key == "base_url"
         assert str(info.value) == "The aya_pay configuration is missing [base_url]."
         env = {"AYA_PAY_APP_KEY": "k", "AYA_PAY_APP_SECRET": "s"}
-        for extra in ({}, {"AYA_PAY_BASE_URL": "  ", "AYA_PGW_BASE_URL": " "}):
+        for extra in ({}, {"AYA_PAY_BASE_URL": "  "}, {"AYA_PGW_BASE_URL": "https://aya.test"}):
             with pytest.raises(ConfigurationError, match=r"missing \[base_url\]"):
                 AyaPayConfig.from_env({**env, **extra})
 
-    def test_reads_the_environment_with_the_aya_pgw_fallbacks(self, mode: str) -> None:
+    def test_reads_the_environment(self, mode: str) -> None:
         env = {
-            "AYA_PGW_APP_KEY": "k",
-            "AYA_PGW_APP_SECRET": "s",
-            "AYA_PGW_BASE_URL": "https://pgw.test/",
+            "AYA_PAY_APP_KEY": "k",
+            "AYA_PAY_APP_SECRET": "s",
+            "AYA_PAY_BASE_URL": "https://aya.test/",
             "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "30",
         }
         config = AyaPayConfig.from_env(env)
         assert config.app_key == "k"
-        assert config.base_url == "https://pgw.test"
+        assert config.base_url == "https://aya.test"
         assert config.timeout_seconds == 30
         cls = AyaPay if mode == "sync" else AsyncAyaPay
         assert cls.from_env({**env, "AYA_PAY_APP_KEY": "new"}).config.app_key == "new"
