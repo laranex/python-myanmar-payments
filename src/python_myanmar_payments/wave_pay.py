@@ -142,7 +142,10 @@ class WavePayItem:
 
 @dataclass(kw_only=True)
 class WavePayPaymentData:
-    """A Wave Pay payment request. Wave only accepts whole kyat (MMK)."""
+    """A Wave Pay payment request. Wave only accepts whole kyat (MMK).
+
+    Length limits count UTF-8 bytes.
+    """
 
     order_id: str
     """Your order ID, at most 100 characters: letters, numbers, ``_`` and ``-``.
