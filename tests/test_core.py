@@ -38,6 +38,7 @@ from python_myanmar_payments import (
     resolve_status,
 )
 from python_myanmar_payments._callback import lossless_body
+from python_myanmar_payments._http import AsyncTransport, HttpRequest, SyncTransport
 from python_myanmar_payments._json import JsonNumber, parse_object, to_plain
 from python_myanmar_payments._support import (
     current_time,
@@ -104,7 +105,9 @@ class TestCallbackRequest:
         assert CallbackRequest(body="[1,2]").parsed_body() == {"[1,2]": ""}
 
     def test_decodes_empty_bodies_and_bodies_given_as_bytes(self) -> None:
-        assert CallbackRequest(body="  \n﻿").parsed_body() == {}
+        assert CallbackRequest(body=" \t\n\r\x00\x0b").parsed_body() == {}
+        # Only ASCII whitespace is trimmed: a byte order mark is a character.
+        assert CallbackRequest(body="\ufeff").parsed_body() == {"\ufeff": ""}
         assert CallbackRequest().parsed_body() == {}
         assert CallbackRequest().body == ""
         assert CallbackRequest().raw_body == b""
@@ -181,6 +184,7 @@ class TestResults:
         with_nonce = payment.to_html(nonce='abc"><x')
         assert '<script nonce="abc&#34;&gt;&lt;x">document' in with_nonce
         assert with_nonce.replace(' nonce="abc&#34;&gt;&lt;x"', "") == html
+        assert payment.to_html(nonce="") == html
         default = FormPayment(order_id="O1", action="https://pay.test", fields=())
         assert default.enctype == "application/x-www-form-urlencoded"
 
@@ -379,6 +383,9 @@ class TestInternals:
             "b": "The b field must be between 1 and 2 characters.",
         }
         Validator().length("x", "", 1, 2).length("x", 5, 1, 2).validate()
+        with pytest.raises(InvalidPaymentDataError) as info:
+            Validator().length("c", "abc", 2, 2).validate()
+        assert dict(info.value.errors) == {"c": "The c field must be 2 characters."}
         assert not Validator().url("u", "http://shop.test:8080/x").failed()
         assert Validator().url("u", "http://shop.test:99999").failed()
         assert Validator().url("u", "http://[::1").failed()
@@ -389,7 +396,7 @@ class TestInternals:
             (1.5, "must not be a float"),
             (b"1", "must be an Amount"),
             ("-5", "non-negative number"),
-            (-5, "non-negative number"),
+            (-5, "must not be negative"),
             ("1000.505", "accepts at most 2 decimal places"),
             ("12345", "must not be greater than 4 characters"),
         ],
@@ -502,6 +509,49 @@ class TestHttpClients:
             ApiError, match=r"Could not reach https://kbz.test/queryorder: ReadTimeout"
         ):
             kbz.status("O1")
+
+    @staticmethod
+    def _own_client(monkeypatch: pytest.MonkeyPatch, name: str, handler: Any) -> None:
+        original = getattr(httpx, name)
+        monkeypatch.setattr(
+            httpx, name, lambda **options: original(transport=httpx.MockTransport(handler))
+        )
+
+    def test_stops_waiting_at_one_overall_deadline(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            time.sleep(0.3)
+            return httpx.Response(200)
+
+        self._own_client(monkeypatch, "Client", handler)
+        transport = SyncTransport(None, 0.05)
+        with pytest.raises(ApiError, match=r"^Could not reach https://kbz.test/x: timed out$"):
+            transport.send(HttpRequest("https://kbz.test/x", ""))
+        transport.close()
+
+    def test_reports_errors_of_its_own_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("refused")
+
+        self._own_client(monkeypatch, "Client", handler)
+        with pytest.raises(ApiError, match=r"^Could not reach https://kbz.test/x: refused$"):
+            SyncTransport(None, 5).send(HttpRequest("https://kbz.test/x", ""))
+
+    def test_stops_waiting_at_one_overall_async_deadline(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            await asyncio.sleep(0.3)
+            return httpx.Response(200)
+
+        self._own_client(monkeypatch, "AsyncClient", handler)
+
+        async def scenario() -> None:
+            transport = AsyncTransport(None, 0.05)
+            with pytest.raises(ApiError, match=r"^Could not reach https://kbz.test/x: timed out$"):
+                await transport.send(HttpRequest("https://kbz.test/x", ""))
+            await transport.aclose()
+
+        asyncio.run(scenario())
 
 
 def test_exposes_the_version() -> None:

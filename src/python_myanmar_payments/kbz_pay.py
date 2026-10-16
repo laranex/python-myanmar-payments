@@ -52,7 +52,7 @@ from ._support import (
     utc_now,
 )
 from ._validate import AmountRule, Validator
-from ._values import get, is_nested, object_at, optional, scalar_string, trimmed
+from ._values import ASCII_WHITESPACE, get, is_nested, object_at, optional, scalar_string, trimmed
 
 __all__ = [
     "AsyncKbzPay",
@@ -99,9 +99,9 @@ class KbzPayConfig:
     def __init__(
         self,
         *,
-        app_id: str = "",
-        app_key: str = "",
-        merchant_code: str = "",
+        app_id: str | int = "",
+        app_key: str | int = "",
+        merchant_code: str | int = "",
         timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
         api_url: str = "",
         pwa_url: str = "",
@@ -110,7 +110,6 @@ class KbzPayConfig:
         self.app_id = require_setting("kbz_pay", "app_id", app_id)
         self.app_key = require_setting("kbz_pay", "app_key", app_key)
         self.merchant_code = require_setting("kbz_pay", "merchant_code", merchant_code)
-        self.timeout_seconds = read_timeout("kbz_pay", timeout_seconds)
         self.api_url = trim_url(require_setting("kbz_pay", "api_url", api_url))
         self.pwa_url = trim_url(require_setting("kbz_pay", "pwa_url", pwa_url)) + "/"
         ttl = require_integer(
@@ -127,14 +126,15 @@ class KbzPayConfig:
                 requirement=self.TIME_TO_LIVE_REQUIREMENT,
             )
         self.time_to_live_minutes = ttl
+        self.timeout_seconds = read_timeout("kbz_pay", timeout_seconds)
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> KbzPayConfig:
         """Reads the ``KBZ_PAY_*`` environment variables.
 
         ``KBZ_PAY_APP_ID``, ``KBZ_PAY_APP_KEY``, ``KBZ_PAY_MERCHANT_CODE``,
-        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``, ``KBZ_PAY_BASE_URL``,
-        ``KBZ_PAY_PWA_BASE_REDIRECT_URL`` and ``KBZ_PAY_TIME_TO_LIVE_IN_MINUTES``.
+        ``KBZ_PAY_BASE_URL``, ``KBZ_PAY_PWA_BASE_REDIRECT_URL``,
+        ``KBZ_PAY_TIME_TO_LIVE_IN_MINUTES`` and ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``.
         Defaults to ``os.environ``.
         """
         env = default_env() if env is None else env
@@ -142,10 +142,10 @@ class KbzPayConfig:
             app_id=env_first(env, "KBZ_PAY_APP_ID"),
             app_key=env_first(env, "KBZ_PAY_APP_KEY"),
             merchant_code=env_first(env, "KBZ_PAY_MERCHANT_CODE"),
-            timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
             api_url=env_first(env, "KBZ_PAY_BASE_URL"),
             pwa_url=env_first(env, "KBZ_PAY_PWA_BASE_REDIRECT_URL"),
             time_to_live_minutes=env_first(env, "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES"),
+            timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
         )
 
     def __repr__(self) -> str:
@@ -396,7 +396,7 @@ class _KbzPayBase:
             code = optional(result, "code")
             message = optional(result, "msg")
             raise ApiError(
-                f"KBZ Pay {call.endpoint} failed: [{code}] {message or ''}".rstrip()
+                f"KBZ Pay {call.endpoint} failed: [{code}] {message or ''}".rstrip(ASCII_WHITESPACE)
                 if code
                 else f"KBZ Pay {call.endpoint} failed with HTTP {response.status}.",
                 gateway_code=code,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
@@ -59,9 +59,9 @@ class CyberSourceConfig:
     def __init__(
         self,
         *,
-        profile_id: str = "",
-        access_key: str = "",
-        secret_key: str = "",
+        profile_id: str | int = "",
+        access_key: str | int = "",
+        secret_key: str | int = "",
         base_url: str = "",
     ) -> None:
         self.profile_id = require_setting("cyber_source", "profile_id", profile_id)
@@ -204,13 +204,13 @@ class CyberSource:
             .required("currency", data.currency)
             .pattern("currency", data.currency, _CURRENCY, "a three letter ISO 4217 code")
             .required("transaction_type", data.transaction_type)
-            .required("locale", data.locale)
-            .pattern("locale", data.locale, _LOCALE, "a locale code such as en-us")
             .when(
                 str(data.transaction_type) not in _TRANSACTION_TYPES,
                 "transaction_type",
                 "The transaction_type field is not a supported transaction type.",
             )
+            .required("locale", data.locale)
+            .pattern("locale", data.locale, _LOCALE, "a locale code such as en-us")
             .validate()
         )
 
@@ -238,7 +238,7 @@ class CyberSource:
             "override_custom_cancel_page": data.cancel_url or "",
         }
         fields = [FormField(name, values[name]) for name in _SIGNED_FIELDS]
-        fields.append(FormField("signature", self._sign(values) or ""))
+        fields.append(FormField("signature", self._sign(values, _SIGNED_FIELDS) or ""))
 
         return FormPayment(
             order_id=data.order_id,
@@ -253,20 +253,23 @@ class CyberSource:
         fields listed in ``signed_field_names`` are trusted: ``decision``,
         ``req_reference_number`` and ``signed_field_names`` itself must be signed,
         and unsigned fields are left out of the result and ``raw``. ``decision``
-        must be ACCEPT, DECLINE, REVIEW, ERROR or CANCEL.
+        must be ACCEPT, DECLINE, REVIEW, ERROR or CANCEL. A bad field list or
+        signature fails with "CyberSource callback signature verification
+        failed."; a signed post without a signed ``decision`` and
+        ``req_reference_number``, or with an unknown decision, fails with
+        "CyberSource callback is malformed.". ``amount`` is ``auth_amount``, else
+        ``req_amount``, else ``None``.
         """
         payload = lossless_input(request)
-        expected = self._sign(payload)
         names = _signed_names(payload) or []
         # The signed text joins `name=value` pairs with ",", so a list that does
         # not sign itself could re-partition a value holding ",decision=ACCEPT".
+        expected = self._sign(payload, names) if "signed_field_names" in names else None
+        signature = payload.get("signature")
         if (
             expected is None
-            or not safe_equal(expected, get(payload, "signature"))
-            or "decision" not in names
-            or "req_reference_number" not in names
-            or "signed_field_names" not in names
-            or trimmed(payload, "decision").upper() not in _STATUSES
+            or not isinstance(signature, str)
+            or not safe_equal(expected, signature)
         ):
             raise SignatureVerificationError(
                 "CyberSource callback signature verification failed.", to_plain_object(payload)
@@ -277,21 +280,27 @@ class CyberSource:
         # request fields).
         signed: LosslessObject = {name: payload.get(name) for name in [*names, "signature"]}
 
+        if (
+            "decision" not in names
+            or "req_reference_number" not in names
+            or trimmed(signed, "decision").upper() not in _STATUSES
+        ):
+            raise SignatureVerificationError(
+                "CyberSource callback is malformed.", to_plain_object(payload)
+            )
+
         decision = trimmed(signed, "decision").upper()
         return PaymentCallback(
             order_id=get(signed, "req_reference_number"),
             status=resolve_status(_STATUSES, decision),
             gateway_status=decision,
             gateway_reference=optional(signed, "transaction_id"),
-            amount=get(signed, "auth_amount") or optional(signed, "req_amount"),
+            amount=get(signed, "auth_amount") or get(signed, "req_amount") or None,
             raw=to_plain_object(signed),
         )
 
-    def _sign(self, fields: Mapping[str, object]) -> str | None:
-        """Signs the fields listed in ``signed_field_names``; ``None`` when one is missing."""
-        names = _signed_names(fields)
-        if not names:
-            return None
+    def _sign(self, fields: Mapping[str, object], names: Sequence[str]) -> str | None:
+        """Signs the ``names`` fields in order; ``None`` when one is missing or not a scalar."""
         pairs = []
         for name in names:
             value = scalar_string(fields.get(name))

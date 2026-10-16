@@ -131,8 +131,11 @@ class TestMyanmarPayments:
         with pytest.raises(ConfigurationError) as info:
             MyanmarPayments(kbz_pay={"app_id": "a"}).kbz_pay()
         assert info.value.key == "app_key"
-        with pytest.raises(TypeError):
+        with pytest.raises(ConfigurationError) as info:
             MyanmarPayments(kbz_pay={"unknown": "x"}).kbz_pay()
+        assert info.value.key == "app_id"
+        shared = {**gateway_config("kbz_pay"), **gateway_config("aya_pay"), "timeout_in_seconds": 5}
+        assert MyanmarPayments(kbz_pay=shared, aya_pay=shared).aya_pay().config.app_key == "app-key"
 
     def test_gateways_take_a_mapping_of_config_arguments(self) -> None:
         config = gateway_config("kbz_pay", merchant_code="c")

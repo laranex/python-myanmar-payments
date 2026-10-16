@@ -8,7 +8,25 @@ from decimal import Decimal
 
 from ._json import JsonNumber, LosslessObject
 
-__all__ = ["get", "is_nested", "object_at", "optional", "scalar_string", "trimmed"]
+__all__ = [
+    "ASCII_WHITESPACE",
+    "ascii_trim",
+    "get",
+    "is_nested",
+    "object_at",
+    "optional",
+    "scalar_string",
+    "trimmed",
+]
+
+ASCII_WHITESPACE = " \t\n\r\x00\x0b"
+"""What PHP's ``trim()`` removes: ASCII whitespace and NUL. A no-break space or a
+byte order mark is a character, not whitespace, in every Laranex SDK."""
+
+
+def ascii_trim(value: str) -> str:
+    """``value`` without surrounding :data:`ASCII_WHITESPACE`."""
+    return value.strip(ASCII_WHITESPACE)
 
 
 def scalar_string(value: object) -> str | None:
@@ -49,8 +67,8 @@ def optional(source: Mapping[str, object], key: str) -> str | None:
 
 
 def trimmed(source: Mapping[str, object], key: str) -> str:
-    """The value at ``key`` with surrounding whitespace removed."""
-    return get(source, key).strip()
+    """The value at ``key`` with surrounding ASCII whitespace removed."""
+    return ascii_trim(get(source, key))
 
 
 def object_at(source: Mapping[str, object], key: str) -> LosslessObject | None:

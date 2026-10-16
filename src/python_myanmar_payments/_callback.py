@@ -8,6 +8,7 @@ from typing import Any
 from urllib.parse import parse_qsl
 
 from ._json import LosslessObject, dumps, parse_object, to_plain_object
+from ._values import ascii_trim
 
 __all__ = ["BodyInput", "CallbackRequest", "HeadersInput", "QueryInput"]
 
@@ -21,16 +22,6 @@ QueryInput = str | bytes | Mapping[str, HeaderValue] | Iterable[tuple[str, str]]
 
 BodyInput = bytes | bytearray | memoryview | str
 """A request body: raw bytes (preferred) or text."""
-
-# JavaScript's String.prototype.trim() whitespace, which includes the byte order mark.
-_WHITESPACE = "".join(
-    chr(code)
-    for code in (
-        *(0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0xA0, 0x1680),
-        *range(0x2000, 0x200B),
-        *(0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF),
-    )
-)
 
 
 class CallbackRequest:
@@ -119,8 +110,12 @@ class CallbackRequest:
 
 
 def lossless_body(request: CallbackRequest) -> LosslessObject:
-    """The body as JSON (numbers kept exact) or a form, or ``{}``."""
-    body = request.body.strip(_WHITESPACE)
+    """The body as JSON (numbers kept exact) or a form, or ``{}``.
+
+    Only ASCII whitespace around the body is ignored, so a body that starts with a
+    byte order mark is read as a form.
+    """
+    body = ascii_trim(request.body)
     if body == "":
         return {}
     json = parse_object(body)

@@ -498,6 +498,20 @@ class TestKbzPayConfig:
             config = KbzPayConfig(**{**CONFIG, "pwa_url": pwa_url})
             assert config.pwa_url == "https://static.kbzpay.com/pgw/uat/pwa/#/"
 
+    def test_accepts_integer_settings_and_caps_whole_numbers(self) -> None:
+        config = KbzPayConfig(**{**CONFIG, "merchant_code": 200123, "app_id": 0})
+        assert (config.merchant_code, config.app_id) == ("200123", "0")
+        for setting in ({"merchant_code": 1.5}, {"merchant_code": True}):
+            with pytest.raises(ConfigurationError, match=r"missing \[merchant_code\]"):
+                KbzPayConfig(**{**CONFIG, **setting})
+        assert (
+            KbzPayConfig(**{**CONFIG, "timeout_seconds": 2147483647}).timeout_seconds == 2147483647
+        )
+        with pytest.raises(ConfigurationError, match=r"\[timeout_in_seconds\] must be"):
+            KbzPayConfig(**{**CONFIG, "timeout_seconds": 2147483648})
+        with pytest.raises(ConfigurationError, match=r"\[time_to_live_in_minutes\] must be"):
+            KbzPayConfig(**{**CONFIG, "time_to_live_minutes": -2147483649})
+
     def test_uses_the_configured_endpoints(self) -> None:
         production = KbzPayConfig(
             **{

@@ -75,9 +75,9 @@ class FormPayment:
         """A complete HTML page that posts the form as soon as it loads.
 
         Every value is escaped. Pass your Content Security Policy ``nonce`` to add
-        it to the inline script.
+        it to the inline script; ``None`` or ``""`` adds no ``nonce`` attribute.
         """
-        nonce_attribute = "" if nonce is None else f' nonce="{_escape(nonce)}"'
+        nonce_attribute = f' nonce="{_escape(nonce)}"' if nonce else ""
         inputs = "".join(
             f'<input type="hidden" name="{_escape(item.name)}" value="{_escape(item.value)}">'
             for item in self.fields

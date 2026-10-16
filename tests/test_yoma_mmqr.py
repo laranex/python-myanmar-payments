@@ -134,7 +134,17 @@ class TestYomaMmqr:
 
     @pytest.mark.parametrize(
         ("expires_in", "ttl"),
-        [(3600, 3540), ("7200", 7140), ("100.5", 60), (0, 3540), ("abc", 3540), (None, 3540)],
+        [
+            (3600, 3540),
+            ("7200", 7140),
+            ("100.5", 60),
+            (0, 3540),
+            ("abc", 3540),
+            (None, 3540),
+            (" \t7200", 7140),
+            ("+7200", 3540),
+            ("\u00a07200", 3540),
+        ],
     )
     def test_caches_the_token_for_its_lifetime_minus_a_minute(
         self, expires_in: Any, ttl: int

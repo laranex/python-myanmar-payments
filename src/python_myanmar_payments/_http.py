@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, field
 from types import TracebackType
 from typing import Any, TypeVar
 from urllib.parse import urlencode
 
+import anyio
 import httpx
 
 from ._errors import ApiError
@@ -71,12 +74,31 @@ def _unreachable(request: HttpRequest, error: Exception) -> ApiError:
     return ApiError(f"Could not reach {request.url}: {str(error) or type(error).__name__}")
 
 
+def _timed_out(request: HttpRequest) -> ApiError:
+    return ApiError(f"Could not reach {request.url}: timed out")
+
+
 def _response(response: httpx.Response) -> GatewayResponse:
     return GatewayResponse(response.status_code, response.content.decode("utf-8", "replace"))
 
 
+def _post(client: httpx.Client, request: HttpRequest) -> GatewayResponse:
+    try:
+        response = client.post(
+            request.url, content=request.body.encode(), headers=dict(request.headers)
+        )
+    except Exception as error:
+        raise _unreachable(request, error) from error
+    return _response(response)
+
+
 class SyncTransport:
-    """Posts requests with an ``httpx.Client``, created on first use unless given."""
+    """Posts requests with an ``httpx.Client``, created on first use unless given.
+
+    With the client it creates, ``timeout`` is one overall deadline per request
+    (connecting, sending and reading the whole response), like the other SDKs. A
+    client you pass keeps its own timeout.
+    """
 
     def __init__(self, client: httpx.Client | None, timeout: float) -> None:
         self._client = client
@@ -85,13 +107,18 @@ class SyncTransport:
         self._lock = threading.Lock()
 
     def send(self, request: HttpRequest) -> GatewayResponse:
+        client = self._http()
+        if not self._owns_client:
+            return _post(client, request)
+        # httpx applies a timeout to each phase, so the request runs in a worker
+        # thread and the caller stops waiting once the overall deadline passes.
+        executor = ThreadPoolExecutor(max_workers=1)
         try:
-            response = self._http().post(
-                request.url, content=request.body.encode(), headers=dict(request.headers)
-            )
-        except Exception as error:
-            raise _unreachable(request, error) from error
-        return _response(response)
+            return executor.submit(_post, client, request).result(timeout=self._timeout)
+        except FutureTimeoutError:
+            raise _timed_out(request) from None
+        finally:
+            executor.shutdown(wait=False)
 
     def _http(self) -> httpx.Client:
         with self._lock:
@@ -108,7 +135,12 @@ class SyncTransport:
 
 
 class AsyncTransport:
-    """Posts requests with an ``httpx.AsyncClient``, created on first use unless given."""
+    """Posts requests with an ``httpx.AsyncClient``, created on first use unless given.
+
+    With the client it creates, ``timeout`` is one overall deadline per request
+    (connecting, sending and reading the whole response). A client you pass keeps
+    its own timeout.
+    """
 
     def __init__(self, client: httpx.AsyncClient | None, timeout: float) -> None:
         self._client = client
@@ -116,8 +148,19 @@ class AsyncTransport:
         self._timeout = timeout
 
     async def send(self, request: HttpRequest) -> GatewayResponse:
+        client = self._http()
+        if not self._owns_client:
+            return await self._post(client, request)
         try:
-            response = await self._http().post(
+            with anyio.fail_after(self._timeout):
+                return await self._post(client, request)
+        except TimeoutError:
+            raise _timed_out(request) from None
+
+    @staticmethod
+    async def _post(client: httpx.AsyncClient, request: HttpRequest) -> GatewayResponse:
+        try:
+            response = await client.post(
                 request.url, content=request.body.encode(), headers=dict(request.headers)
             )
         except Exception as error:

@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import Enum
 
+from ._values import ascii_trim
+
 __all__ = ["PaymentFlow", "PaymentStatus", "resolve_status"]
 
 
@@ -59,8 +61,8 @@ class PaymentFlow(_StrEnum):
 def resolve_status(
     statuses: Mapping[str, PaymentStatus], gateway_status: str | None
 ) -> PaymentStatus:
-    """Maps a gateway status onto a :class:`PaymentStatus`, trimming whitespace.
+    """Maps a gateway status onto a :class:`PaymentStatus`, trimming ASCII whitespace.
 
     Statuses missing from the map resolve to ``PaymentStatus.UNKNOWN``.
     """
-    return statuses.get((gateway_status or "").strip(), PaymentStatus.UNKNOWN)
+    return statuses.get(ascii_trim(gateway_status or ""), PaymentStatus.UNKNOWN)

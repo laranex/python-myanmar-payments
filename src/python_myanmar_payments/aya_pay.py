@@ -37,7 +37,7 @@ from ._support import (
     unix_time,
 )
 from ._validate import AmountRule, Validator
-from ._values import get, is_nested, object_at, optional, scalar_string, trimmed
+from ._values import ASCII_WHITESPACE, get, is_nested, object_at, optional, scalar_string, trimmed
 
 __all__ = [
     "AsyncAyaPay",
@@ -73,15 +73,15 @@ class AyaPayConfig:
     def __init__(
         self,
         *,
-        app_key: str = "",
-        app_secret: str = "",
-        timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
+        app_key: str | int = "",
+        app_secret: str | int = "",
         base_url: str = "",
+        timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
         self.app_key = require_setting("aya_pay", "app_key", app_key)
         self.app_secret = require_setting("aya_pay", "app_secret", app_secret)
-        self.timeout_seconds = read_timeout("aya_pay", timeout_seconds)
         self.base_url = trim_url(require_setting("aya_pay", "base_url", base_url))
+        self.timeout_seconds = read_timeout("aya_pay", timeout_seconds)
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> AyaPayConfig:
@@ -95,8 +95,8 @@ class AyaPayConfig:
         return cls(
             app_key=env_first(env, "AYA_PAY_APP_KEY"),
             app_secret=env_first(env, "AYA_PAY_APP_SECRET"),
-            timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
             base_url=env_first(env, "AYA_PAY_BASE_URL"),
+            timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
         )
 
     def __repr__(self) -> str:
@@ -243,8 +243,6 @@ class _AyaPayBase:
             .string("return_url", data.return_url)
             .url("return_url", data.return_url)
             .string("description", data.description)
-            .when(_has_colon(data.order_id), "order_id", _NO_COLON.format("order_id"))
-            .when(_has_colon(data.description), "description", _NO_COLON.format("description"))
             .when(
                 user_refs is not None
                 and (
@@ -258,6 +256,8 @@ class _AyaPayBase:
                 "user_refs",
                 "The user_refs field must not have more than 5 items.",
             )
+            .when(_has_colon(data.order_id), "order_id", _NO_COLON.format("order_id"))
+            .when(_has_colon(data.description), "description", _NO_COLON.format("description"))
             .when(
                 refs_are_list and any(_has_colon(ref) for ref in user_refs),  # type: ignore[attr-defined]
                 "user_refs",
@@ -348,7 +348,9 @@ class _AyaPayBase:
         if not response.successful() or status != "00":
             message = optional(body, "message")
             raise ApiError(
-                f"AYA Pay {call.endpoint} failed: [{status}] {message or ''}".rstrip()
+                f"AYA Pay {call.endpoint} failed: [{status}] {message or ''}".rstrip(
+                    ASCII_WHITESPACE
+                )
                 if status
                 else f"AYA Pay {call.endpoint} failed with HTTP {response.status}.",
                 gateway_code=status or None,
@@ -369,7 +371,9 @@ class _AyaPayBase:
             unknown: list[str] = []
             listed = entry.get("methods")
             for method in listed if isinstance(listed, list) else []:
-                name = scalar_string(method) or ""
+                name = scalar_string(method)
+                if name is None:
+                    continue
                 if name in _METHODS:
                     methods.append(AyaPayMethod(name))
                 else:
@@ -399,47 +403,48 @@ class _AyaPayBase:
         )
 
     def _verified_payload(self, data: LosslessObject, context: str) -> LosslessObject:
-        """Decodes a ``payload`` + ``checkSum`` pair; returns the payload if it matches."""
+        """Decodes a ``payload`` + ``checkSum`` pair; returns the payload if it matches.
 
-        def fail() -> SignatureVerificationError:
-            return SignatureVerificationError(
-                f"AYA Pay {context} checksum verification failed.", to_plain_object(data)
-            )
+        Undecodable or nested data and a wrong checksum fail with "AYA Pay
+        {context} checksum verification failed."; a correctly signed payload
+        that is not well formed fails with "AYA Pay {context} payload is
+        malformed.".
+        """
 
+        def fail(problem: str) -> SignatureVerificationError:
+            return SignatureVerificationError(f"AYA Pay {context} {problem}", to_plain_object(data))
+
+        encoded = data.get("payload")
+        checksum = data.get("checkSum")
         # Base64 never contains spaces: a space is a `+` that an unencoded query
         # string turned into one.
-        text = decode_base64(get(data, "payload").replace(" ", "+"))
+        text = decode_base64(encoded.replace(" ", "+")) if isinstance(encoded, str) else None
         payload = None if text is None else parse_object(text)
-        if payload is None:
-            raise fail()
+        if payload is None or not isinstance(checksum, str):
+            raise fail("checksum verification failed.")
 
-        # The checksum joins the values with ":", so a value holding a ":" could be
-        # re-split into other fields (e.g. a "02" status into "00"). Only dateTime
-        # may hold one, and only in AYA's date and time format.
         parts: list[str] = []
         values: dict[str, str] = {}
         for name in _PAYLOAD_FIELDS:
             key = "currenyCode" if name == "currencyCode" and "currenyCode" in payload else name
             if key in payload:
                 if is_nested(payload[key]):
-                    raise fail()
-                text = scalar_string(payload[key]) or ""
-                if ":" in text and name != "dateTime":
-                    raise fail()
-                parts.append(text)
-                values[name] = text
+                    raise fail("checksum verification failed.")
+                value = scalar_string(payload[key]) or ""
+                parts.append(value)
+                values[name] = value
 
-        if not _well_formed(values) or not safe_equal(
-            self._checksum(parts), get(data, "checkSum").lower()
-        ):
-            raise fail()
+        if not safe_equal(self._checksum(parts), checksum.lower()):
+            raise fail("checksum verification failed.")
+        if not _well_formed(values):
+            raise fail("payload is malformed.")
         return payload
 
     def _checksum(self, parts: Sequence[str]) -> str:
         return hmac_sha256_hex(self.config.app_secret, ":".join(parts))
 
 
-_NO_COLON = "The {} field must not contain a colon (:)."
+_NO_COLON = 'The {} field must not contain ":".'
 
 
 def _has_colon(value: object) -> bool:
@@ -448,15 +453,24 @@ def _has_colon(value: object) -> bool:
 
 
 def _well_formed(values: Mapping[str, str]) -> bool:
-    """Whether the signed values hold every field a result needs, in AYA's formats."""
+    """Whether the signed values hold every field a result needs, in AYA's formats.
+
+    The checksum joins the values with ":", so a value holding a ":" could be
+    re-split into other fields (e.g. a "02" status into "00"). Only dateTime may
+    hold one, and only in AYA's date and time format (or empty).
+    """
+    for name, value in values.items():
+        if name == "dateTime":
+            if value != "" and _DATE_TIME.fullmatch(value) is None:
+                return False
+        elif ":" in value:
+            return False
     if any(values.get(name, "") == "" for name in _REQUIRED_FIELDS):
         return False
-    date_time = values.get("dateTime")
     return (
         _STATUS_CODE.fullmatch(values["statusCode"]) is not None
         and values["currencyCode"] == _CURRENCY_MMK
         and _AMOUNT.fullmatch(values["amount"]) is not None
-        and (date_time is None or _DATE_TIME.fullmatch(date_time) is not None)
     )
 
 

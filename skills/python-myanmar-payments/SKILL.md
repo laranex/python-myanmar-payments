@@ -33,15 +33,15 @@ kbz = payments.kbz_pay()  # also wave_pay(), aya_pay(), yoma_mmqr(), cyber_sourc
 ```
 
 - Or build one gateway: `KbzPay(KbzPayConfig(app_id=..., app_key=..., merchant_code=..., api_url=KbzPayConfig.PRODUCTION_API_URL, pwa_url=KbzPayConfig.PRODUCTION_PWA_URL, time_to_live_minutes=15))` (add `timeout_seconds=` to change the 30-second default), `KbzPay.from_env()` or `KbzPay(KbzPayConfig.from_env())`; in async code use `AsyncMyanmarPayments.from_env()` and `AsyncKbzPay`.
-- Or pass the settings directly: gateways and `MyanmarPayments(kbz_pay={"app_id": ..., "app_key": ..., "merchant_code": ..., "api_url": ..., "pwa_url": ..., "time_to_live_minutes": 15, "timeout_seconds": 30})` take config objects or mappings of their keyword arguments.
-- Options (keyword arguments): `http_client` (your own `httpx.Client` / `httpx.AsyncClient`) (it keeps its own timeout; without one the gateway creates a client with the config's `timeout_seconds`); close the clients the package created with `payments.close()` / `await payments.aclose()` or a `with` block. Yoma and the facades also take `token_cache` (any `TokenCache`, default `MemoryTokenCache`; `AsyncYomaMmqr`/`AsyncMyanmarPayments` also take an `AsyncTokenCache`; back it with Redis when you run several processes).
-- A missing setting raises `ConfigurationError` (`gateway`, `key`), and a time setting that is not a whole number greater than 0 raises it too (an unset or blank timeout falls back to 30 seconds; `"0"` or `"2.5"` is still an error).
+- Or pass the settings directly: gateways and `MyanmarPayments(kbz_pay={"app_id": ..., "app_key": ..., "merchant_code": ..., "api_url": ..., "pwa_url": ..., "time_to_live_minutes": 15, "timeout_seconds": 30})` take config objects or mappings of their keyword arguments (other keys are ignored, so one shared mapping can configure several gateways; credentials may be text or integers, e.g. `"merchant_code": 200123`).
+- Options (keyword arguments): `http_client` (your own `httpx.Client` / `httpx.AsyncClient`) (it keeps its own timeout; without one the gateway creates a client whose `timeout_seconds` is one overall deadline per request, connecting and reading included); close the clients the package created with `payments.close()` / `await payments.aclose()` or a `with` block. Yoma and the facades also take `token_cache` (any `TokenCache`, default `MemoryTokenCache`; `AsyncYomaMmqr`/`AsyncMyanmarPayments` also take an `AsyncTokenCache`; back it with Redis when you run several processes).
+- A missing setting raises `ConfigurationError` (`gateway`, `key`), and a time setting that is not a whole number from 1 to 2147483647 raises it too (an unset or blank timeout falls back to 30 seconds; `"0"` or `"2.5"` is still an error). Settings are checked in a fixed order (credentials, URLs, time to live, then the timeout) and only ASCII whitespace is trimmed.
 
 ## Use
 
 ### Amounts
 
-Amounts are `Amount.kyat(1000)`, `Amount.parse("1000.50")`, a whole `int`, decimal text or a `Decimal`; never a float such as `10.5`. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave, AYA and Yoma take whole kyat. Invalid data raises `InvalidPaymentDataError` with `errors` per field (`order_id`, `amount`, ...), before any request is sent. Compare a gateway's amount by value with `amount.equals(callback.amount)`.
+Amounts are `Amount.kyat(1000)`, `Amount.parse("1000.50")`, a whole `int`, decimal text or a `Decimal`; never a float such as `10.5`. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave, AYA and Yoma take whole kyat. Invalid data raises `InvalidPaymentDataError` with `errors` per field (`order_id`, `amount`, ...), before any request is sent; a negative amount is reported as `The amount field must not be negative.` with the other errors. Callback, return and cancel URLs must be plain ASCII `http://` or `https://` URLs with a valid host name or bracketed IP (no spaces, no `_` or non-ASCII host names). Compare a gateway's amount by value with `amount.equals(callback.amount)`.
 
 ### Start a payment
 
@@ -61,7 +61,7 @@ return redirect(payment.url)
 ```
 
 - `RedirectPayment` (`url`) from `kbz.pwa(data)` and `wave.initiate(data)`. Wave fills `data.merchant_reference_id` when empty; store it. Wave's `order_id` and `merchant_reference_id` may only hold letters, numbers, `_` and `-` (at most 100 characters); `callback_url`, `return_url` and `description` take at most 255. `WavePayPaymentData` also takes optional `merchant_name` and `time_to_live_seconds` (an `int` greater than 0) to override the configured values for one payment, and `additional_field_3` to `additional_field_5` (at most 50 characters each) for extra information Wave echoes in the callback.
-- `FormPayment` from `aya.initiate(data)` and `cyber_source.initiate(data)` (no network call, never awaited): return `payment.to_html()` as an auto-submitting page (`payment.to_html(nonce)` adds your Content Security Policy nonce to its inline script), or render `action`, `fields` and `enctype` yourself.
+- `FormPayment` from `aya.initiate(data)` and `cyber_source.initiate(data)` (no network call, never awaited): return `payment.to_html()` as an auto-submitting page (`payment.to_html(nonce)` adds your Content Security Policy nonce to its inline script; an empty nonce adds none), or render `action`, `fields` and `enctype` yourself.
 - `QrPayment` from `kbz.qr(data)` (encode `qr_string`) and `yoma.initiate(data)` (`qr_image_data_uri()`, `expires_at`, `reference`). A Yoma QR lives `YomaMmqr.QR_LIFETIME_SECONDS` (120); renew it with `yoma.renew_qr(order_id)`.
 - `AppPayment` from `kbz.app(data)`: send `payment.to_dict()` (`orderId`, `orderInfo`, `sign`, `signType`) to your mobile app.
 
@@ -81,7 +81,7 @@ request = CallbackRequest(
 )
 try:
     callback = kbz.handle_callback(request)
-except SignatureVerificationError:
+except SignatureVerificationError:  # bad signature, or a signed callback that is malformed
     return HttpResponse("invalid signature", status=400)
 if callback.is_successful():
     ...  # compare callback.amount with the order, then fulfill callback.order_id once

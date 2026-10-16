@@ -44,7 +44,7 @@ from ._support import (
     utc_now,
 )
 from ._validate import AmountRule, Validator
-from ._values import get, is_nested, optional, trimmed
+from ._values import ASCII_WHITESPACE, get, is_nested, optional, trimmed
 
 __all__ = [
     "AsyncYomaMmqr",
@@ -86,23 +86,23 @@ class YomaMmqrConfig:
     def __init__(
         self,
         *,
-        merchant_id: str = "",
-        client_id: str = "",
-        client_secret: str = "",
-        webhook_hash_key: str = "",
-        api_version: str = "",
-        timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
-        webhook_secret: str = "",
+        merchant_id: str | int = "",
+        client_id: str | int = "",
+        client_secret: str | int = "",
+        webhook_hash_key: str | int = "",
+        api_version: str | int = "",
+        webhook_secret: str | int = "",
         base_url: str = "",
+        timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
         self.merchant_id = require_setting("yoma_mmqr", "merchant_id", merchant_id)
         self.client_id = require_setting("yoma_mmqr", "client_id", client_id)
         self.client_secret = require_setting("yoma_mmqr", "client_secret", client_secret)
         self.webhook_hash_key = require_setting("yoma_mmqr", "webhook_hashkey", webhook_hash_key)
         self.api_version = require_setting("yoma_mmqr", "api_version", api_version)
-        self.timeout_seconds = read_timeout("yoma_mmqr", timeout_seconds)
         self.webhook_secret = require_setting("yoma_mmqr", "webhook_secret", webhook_secret)
         self.base_url = trim_url(require_setting("yoma_mmqr", "base_url", base_url))
+        self.timeout_seconds = read_timeout("yoma_mmqr", timeout_seconds)
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> YomaMmqrConfig:
@@ -121,9 +121,9 @@ class YomaMmqrConfig:
             client_secret=env_first(env, "YOMA_MMQR_CLIENT_SECRET"),
             webhook_hash_key=env_first(env, "YOMA_MMQR_WEBHOOK_HASHKEY"),
             api_version=env_first(env, "YOMA_MMQR_API_VERSION"),
-            timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
             webhook_secret=env_first(env, "YOMA_MMQR_WEBHOOK_SECRET"),
             base_url=env_first(env, "YOMA_MMQR_BASE_URL"),
+            timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
         )
 
     def __repr__(self) -> str:
@@ -153,7 +153,8 @@ _STATUSES: Mapping[str, PaymentStatus] = {
     "FAIL": PaymentStatus.FAILED,
 }
 
-_LEADING_INT = re.compile(r"\s*([+-]?[0-9]+)")
+# The leading digits of expires_in after ASCII whitespace, like PHP's /^\s*([0-9]+)/.
+_LEADING_INT = re.compile(r"[ \t\n\r\x0b\x0c]*([0-9]+)")
 
 
 @dataclass(frozen=True)
@@ -340,7 +341,7 @@ class _YomaMmqrBase:
 def _api_error(endpoint: str, status: int, body: LosslessObject, error_code: str) -> ApiError:
     message = optional(body, "errorDescription") or optional(body, "error_description")
     return ApiError(
-        f"Yoma MMQR {endpoint} failed: [{error_code}] {message or ''}".rstrip()
+        f"Yoma MMQR {endpoint} failed: [{error_code}] {message or ''}".rstrip(ASCII_WHITESPACE)
         if error_code
         else f"Yoma MMQR {endpoint} failed with HTTP {status}.",
         gateway_code=error_code or None,

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass
 from decimal import Decimal
-from urllib.parse import urlsplit
 
 from ._amount import Amount, to_amount
 from ._errors import InvalidPaymentDataError
+from ._values import ascii_trim
 
 
 @dataclass(frozen=True)
@@ -42,7 +43,7 @@ class Validator:
         self._errors: dict[str, str] = {}
 
     def required(self, field: str, value: object) -> Validator:
-        if not isinstance(value, str) or value.strip() == "":
+        if not isinstance(value, str) or ascii_trim(value) == "":
             self._fail(field, f"The {field} field is required.")
         return self
 
@@ -58,7 +59,9 @@ class Validator:
             if size < minimum or size > maximum:
                 self._fail(
                     field,
-                    f"The {field} field must be between {minimum} and {maximum} characters.",
+                    f"The {field} field must be {minimum} characters."
+                    if minimum == maximum
+                    else f"The {field} field must be between {minimum} and {maximum} characters.",
                 )
         return self
 
@@ -103,6 +106,8 @@ class Validator:
                 f"The {field} field must be an Amount, e.g. Amount.kyat(1000) or "
                 "Amount.parse('1000.50').",
             )
+        if is_int(value) and value < 0:  # type: ignore[operator]
+            return self._fail(field, f"The {field} field must not be negative.")
         amount = to_amount(value)
         if amount is None:
             return self._fail(
@@ -131,7 +136,7 @@ class Validator:
 
     def url(self, field: str, value: object) -> Validator:
         """Fails when a set value is not an absolute http or https URL."""
-        if isinstance(value, str) and value != "" and not _is_http_url(value):
+        if isinstance(value, str) and value != "" and not is_http_url(value):
             self._fail(field, f"The {field} field must be a valid http or https URL.")
         return self
 
@@ -154,10 +159,51 @@ class Validator:
         return self
 
 
-def _is_http_url(value: str) -> bool:
+_PRINTABLE_ASCII = re.compile(r"[\x21-\x7e]+")
+_HTTP_URL = re.compile(
+    r"(?i:https?)://"
+    r"(?:[^/?#@]*@)?"  # User info.
+    r"(?P<host>\[[^\]/?#]*\]|[^:/?#\[\]]*)"
+    r"(?::(?P<port>[^/?#]*))?"
+    r"(?:[/?#].*)?",
+    re.DOTALL,
+)
+_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?")
+
+
+def is_http_url(value: str) -> bool:
+    """Whether ``value`` is an http or https URL, checked like PHP's ``FILTER_VALIDATE_URL``.
+
+    Printable ASCII only (no whitespace or control characters); ``http://`` or
+    ``https://`` in any case followed by a host: a bracketed IP literal, or
+    dot-separated labels of letters, digits and inner ``-`` (1 to 63 characters
+    each, at most 253 in all, one trailing dot allowed). A port is 0 to 65535.
+    User info, path, query and fragment may hold any printable ASCII.
+    """
+    if _PRINTABLE_ASCII.fullmatch(value) is None:
+        return False
+    match = _HTTP_URL.fullmatch(value)
+    if match is None:
+        return False
+    port = match.group("port")
+    if port is not None and port != "" and (not port.isdigit() or int(port) > 65535):
+        return False
+    host = match.group("host")
+    if host.startswith("["):
+        return _is_ip_literal(host[1:-1])
+    return _is_hostname(host)
+
+
+def _is_hostname(host: str) -> bool:
+    name = host[:-1] if host.endswith(".") else host
+    if name == "" or len(name) > 253:
+        return False
+    return all(len(label) <= 63 and _LABEL.fullmatch(label) for label in name.split("."))
+
+
+def _is_ip_literal(address: str) -> bool:
     try:
-        parts = urlsplit(value)
-        _ = parts.port  # Raises for an invalid port.
+        ipaddress.IPv6Address(address)
     except ValueError:
         return False
-    return parts.scheme.lower() in ("http", "https") and bool(parts.hostname)
+    return True

@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import inspect
 import os
 import re
 import secrets
@@ -15,6 +16,7 @@ from typing import Any, TypeVar
 from urllib.parse import quote_plus
 
 from ._errors import ConfigurationError
+from ._values import ascii_trim
 
 EnvSource = Mapping[str, str]
 """Environment variables, e.g. ``os.environ``."""
@@ -109,9 +111,9 @@ def default_env() -> EnvSource:
 
 
 def env_first(env: EnvSource, *keys: str) -> str:
-    """The first non-empty value among ``keys``, trimmed, or ``""``."""
+    """The first non-empty value among ``keys``, trimmed of ASCII whitespace, or ``""``."""
     for key in keys:
-        value = (env.get(key) or "").strip()
+        value = ascii_trim(env.get(key) or "")
         if value:
             return value
     return ""
@@ -121,54 +123,81 @@ _C = TypeVar("_C")
 
 
 def config_of(config_class: type[_C], config: _C | Mapping[str, Any]) -> _C:
-    """``config`` itself, or a ``config_class`` built from a mapping of its arguments."""
+    """``config`` itself, or a ``config_class`` built from a mapping of its arguments.
+
+    Keys that are not arguments of ``config_class`` are ignored, so one shared
+    settings mapping can configure several gateways.
+    """
     if isinstance(config, config_class):
         return config
-    return config_class(**config)  # type: ignore[arg-type]
+    parameters = inspect.signature(config_class).parameters
+    return config_class(**{key: value for key, value in config.items() if key in parameters})  # type: ignore[union-attr]
 
 
 _INT = re.compile(r"[+-]?[0-9]+")
+
+MAX_INTEGER = 2147483647
+"""The largest whole number a setting may hold (2^31 - 1), the same in every Laranex SDK."""
 
 DEFAULT_TIMEOUT_SECONDS = 30
 """Seconds the default HTTP client waits for a gateway when no timeout is set."""
 
 
+def _blank(value: object) -> bool:
+    return value is None or (isinstance(value, str) and ascii_trim(value) == "")
+
+
+def _integer(value: object) -> int | None:
+    """An int or integer text from -2147483648 to 2147483647, else ``None``."""
+    number: int | None = None
+    if isinstance(value, int) and not isinstance(value, bool):
+        number = value
+    elif isinstance(value, str) and _INT.fullmatch(ascii_trim(value)):
+        number = int(ascii_trim(value))
+    if number is None or not -MAX_INTEGER - 1 <= number <= MAX_INTEGER:
+        return None
+    return number
+
+
 def require_seconds(gateway: str, key: str, value: object) -> int:
-    """A whole number of seconds greater than 0, given as an int or integer text.
+    """A whole number of seconds from 1 to 2147483647, given as an int or integer text.
 
     Unset or blank raises a :class:`ConfigurationError` naming ``key``; anything
-    else that is not a whole number greater than 0 raises it as invalid.
+    else that is not a whole number in that range raises it as invalid.
     """
-    if value is None or (isinstance(value, str) and value.strip() == ""):
+    if _blank(value):
         raise ConfigurationError(gateway, key)
-    seconds: int | None = None
-    if isinstance(value, int) and not isinstance(value, bool):
-        seconds = value
-    elif isinstance(value, str) and _INT.fullmatch(value.strip()):
-        seconds = int(value.strip())
+    seconds = _integer(value)
     if seconds is None or seconds <= 0:
         raise ConfigurationError(gateway, key, invalid=True)
     return seconds
 
 
 def require_integer(gateway: str, key: str, value: object, requirement: str) -> int:
-    """A whole number given as an int or integer text.
+    """A whole number from -2147483648 to 2147483647, given as an int or integer text.
 
     Unset or blank raises a :class:`ConfigurationError` naming ``key``; anything
-    else that is not a whole number raises it as invalid, naming ``requirement``.
+    else that is not a whole number in that range raises it as invalid, naming
+    ``requirement``.
     """
-    if value is None or (isinstance(value, str) and value.strip() == ""):
+    if _blank(value):
         raise ConfigurationError(gateway, key)
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    if isinstance(value, str) and _INT.fullmatch(value.strip()):
-        return int(value.strip())
-    raise ConfigurationError(gateway, key, invalid=True, requirement=requirement)
+    number = _integer(value)
+    if number is None:
+        raise ConfigurationError(gateway, key, invalid=True, requirement=requirement)
+    return number
 
 
 def require_setting(gateway: str, key: str, value: object) -> str:
-    """The value, or raises a :class:`ConfigurationError` naming ``key``."""
-    if not isinstance(value, str) or value.strip() == "":
+    """The value as text, or raises a :class:`ConfigurationError` naming ``key``.
+
+    Text and integers are accepted (an integer becomes its decimal text, e.g.
+    ``200123`` is ``"200123"``); blank text, floats, booleans and anything else
+    count as missing. The value is returned untrimmed.
+    """
+    if isinstance(value, int) and not isinstance(value, bool):
+        value = str(value)
+    if not isinstance(value, str) or ascii_trim(value) == "":
         raise ConfigurationError(gateway, key)
     return value
 
@@ -184,6 +213,6 @@ def read_timeout(gateway: str, value: object) -> int:
     Unset or blank falls back to the default; any other value is read like
     :func:`require_seconds` and reported under ``timeout_in_seconds``.
     """
-    if value is None or (isinstance(value, str) and value.strip() == ""):
+    if _blank(value):
         return DEFAULT_TIMEOUT_SECONDS
     return require_seconds(gateway, "timeout_in_seconds", value)

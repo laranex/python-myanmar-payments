@@ -41,7 +41,8 @@
                 "content_type": "application/json",
                 "body": "{\"Request\":{\"appid\":\"kp123\",\"merch_code\":\"100001\",\"merch_order_id\":\"ORDER_1\",\"mm_order_id\":\"MM1\",\"notify_time\":\"1536637503\",\"total_amount\":\"1000.50\",\"trade_status\":\"PAY_SUCCESS\",\"trans_currency\":\"MMK\",\"extra\":{\"note\":\"x\"},\"sign_type\":\"SHA256\",\"sign\":\"7E349C9F5FBD5310BEC3279B5BC82F322D6AF2146040D4C290F9DA0C47E98E17\"}}",
                 "expected": {
-                    "valid": false
+                    "valid": false,
+                    "message": "KBZ Pay callback signature verification failed."
                 }
             },
             {
@@ -55,6 +56,50 @@
                     "gateway_status": "PAY_SUCCESS",
                     "gateway_reference": "MM1",
                     "amount": "1000.50"
+                }
+            },
+            {
+                "name": "ASCII whitespace around trade_status is trimmed",
+                "content_type": "application/json",
+                "body": "{\"Request\":{\"appid\":\"kp123\",\"merch_code\":\"100001\",\"merch_order_id\":\"ORDER_1\",\"mm_order_id\":\"MM1\",\"notify_time\":\"1536637503\",\"total_amount\":\"1000.50\",\"trade_status\":\" \\tPAY_SUCCESS\\n\\u000b\",\"trans_currency\":\"MMK\",\"sign_type\":\"SHA256\",\"sign\":\"35CF50B75FC496153C2D9E0D1CAF18637F2549849EFF0AE19A4B8D6586261DFF\"}}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "PAY_SUCCESS",
+                    "gateway_reference": "MM1",
+                    "amount": "1000.50"
+                }
+            },
+            {
+                "name": "a no-break space is not whitespace",
+                "content_type": "application/json",
+                "body": "{\"Request\":{\"appid\":\"kp123\",\"merch_code\":\"100001\",\"merch_order_id\":\"ORDER_1\",\"mm_order_id\":\"MM1\",\"notify_time\":\"1536637503\",\"total_amount\":\"1000.50\",\"trade_status\":\"PAY_SUCCESS \",\"trans_currency\":\"MMK\",\"sign_type\":\"SHA256\",\"sign\":\"DA719F5117F5D5A1213B790E04A59CF50A8E381C8738A7EC037E835CE1C43D8C\"}}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "unknown",
+                    "gateway_status": "PAY_SUCCESS ",
+                    "gateway_reference": "MM1",
+                    "amount": "1000.50"
+                }
+            },
+            {
+                "name": "a byte order mark before the JSON is not whitespace, so the body is read as a form",
+                "content_type": "application/json",
+                "body": "﻿{\"Request\":{\"appid\":\"kp123\",\"merch_code\":\"100001\",\"merch_order_id\":\"ORDER_1\",\"mm_order_id\":\"MM1\",\"notify_time\":\"1536637503\",\"total_amount\":\"1000.50\",\"trade_status\":\"PAY_SUCCESS\",\"trans_currency\":\"MMK\",\"sign_type\":\"SHA256\",\"sign\":\"7E349C9F5FBD5310BEC3279B5BC82F322D6AF2146040D4C290F9DA0C47E98E17\"}}",
+                "expected": {
+                    "valid": false,
+                    "message": "KBZ Pay callback signature verification failed."
+                }
+            },
+            {
+                "name": "a wrong signature is rejected",
+                "content_type": "application/json",
+                "body": "{\"Request\":{\"appid\":\"kp123\",\"merch_code\":\"100001\",\"merch_order_id\":\"ORDER_1\",\"mm_order_id\":\"MM1\",\"notify_time\":\"1536637503\",\"total_amount\":\"1000.50\",\"trade_status\":\"PAY_FAILED\",\"trans_currency\":\"MMK\",\"sign_type\":\"SHA256\",\"sign\":\"7E349C9F5FBD5310BEC3279B5BC82F322D6AF2146040D4C290F9DA0C47E98E17\"}}",
+                "expected": {
+                    "valid": false,
+                    "message": "KBZ Pay callback signature verification failed."
                 }
             }
         ],
@@ -90,7 +135,8 @@
                 "content_type": "application/json",
                 "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"timeToLiveSeconds\":\"300\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"amount\":\"1000\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"merchantReferenceId\":\"ref-1\",\"initiatorMsisdn\":\"9791009039\",\"transactionId\":\"360\",\"paymentRequestId\":\"361\",\"requestTime\":{\"at\":\"now\"},\"hashValue\":\"c321c4eadb290408a3af6b7cc035fa384cb6b9e1a99d82e1d9e299935049258d\"}",
                 "expected": {
-                    "valid": false
+                    "valid": false,
+                    "message": "Wave Pay callback hash verification failed."
                 }
             },
             {
@@ -222,6 +268,51 @@
                     "gateway_reference": "225840",
                     "amount": "1000"
                 }
+            },
+            {
+                "name": "a correctly hashed amount that is not a decimal is malformed",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"timeToLiveSeconds\":\"300\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"amount\":\"1,000\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"merchantReferenceId\":\"ref-1\",\"initiatorMsisdn\":\"9791009039\",\"transactionId\":\"360\",\"paymentRequestId\":\"361\",\"requestTime\":\"2026-10-07 10:00:00\",\"hashValue\":\"6641aa6440367a93c8e67f0efc2f4d9a220af71ad30ccc2b06d1ff603f73a3a9\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay callback is malformed."
+                }
+            },
+            {
+                "name": "a correctly hashed callback without either id is malformed",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"timeToLiveSeconds\":\"300\",\"merchantId\":\"merchant\",\"orderId\":\"\",\"amount\":\"1000\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"merchantReferenceId\":\"\",\"initiatorMsisdn\":\"9791009039\",\"transactionId\":\"360\",\"paymentRequestId\":\"361\",\"requestTime\":\"2026-10-07 10:00:00\",\"hashValue\":\"4ca401ce51bdea4f63229ff55aa8bfde381c9b212066cf63ece8bfde3351fbcf\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay callback is malformed."
+                }
+            },
+            {
+                "name": "a correctly hashed id holding other characters is malformed",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"timeToLiveSeconds\":\"300\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER 1\",\"amount\":\"1000\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"merchantReferenceId\":\"ref-1\",\"initiatorMsisdn\":\"9791009039\",\"transactionId\":\"360\",\"paymentRequestId\":\"361\",\"requestTime\":\"2026-10-07 10:00:00\",\"hashValue\":\"6d9f055a89ee15ae38d8a47bb8aa148538272c0f48a2acdf98f063f9588d3b27\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay callback is malformed."
+                }
+            },
+            {
+                "name": "a wrong hash is rejected",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"timeToLiveSeconds\":\"300\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"amount\":\"1001\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"merchantReferenceId\":\"ref-1\",\"initiatorMsisdn\":\"9791009039\",\"transactionId\":\"360\",\"paymentRequestId\":\"361\",\"requestTime\":\"2026-10-07 10:00:00\",\"hashValue\":\"9aa5ee1fef07310dab4a648f230b5db8e54bc2bb25488df0607a385975bd058a\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay callback hash verification failed."
+                }
+            },
+            {
+                "name": "a hashValue that is not a string is rejected",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"timeToLiveSeconds\":\"300\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"amount\":\"1000\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"merchantReferenceId\":\"ref-1\",\"initiatorMsisdn\":\"9791009039\",\"transactionId\":\"360\",\"paymentRequestId\":\"361\",\"requestTime\":\"2026-10-07 10:00:00\",\"hashValue\":123}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay callback hash verification failed."
+                }
             }
         ],
         "aya_pay": [
@@ -256,7 +347,8 @@
                 "content_type": "application/json",
                 "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAifQ=\",\"checkSum\":\"469ed0c9b1179e36b526144fda4d9a8187d7877b160006440e8737e0011c4a49\"}",
                 "expected": {
-                    "valid": false
+                    "valid": false,
+                    "message": "AYA Pay callback checksum verification failed."
                 }
             },
             {
@@ -264,7 +356,8 @@
                 "content_type": "application/json",
                 "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAi-___\",\"checkSum\":\"469ed0c9b1179e36b526144fda4d9a8187d7877b160006440e8737e0011c4a49\"}",
                 "expected": {
-                    "valid": false
+                    "valid": false,
+                    "message": "AYA Pay callback checksum verification failed."
                 }
             },
             {
@@ -272,7 +365,8 @@
                 "content_type": "application/json",
                 "body": "{\"payload\":\"eyJtZXJj\\naE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAifQ==\",\"checkSum\":\"469ed0c9b1179e36b526144fda4d9a8187d7877b160006440e8737e0011c4a49\"}",
                 "expected": {
-                    "valid": false
+                    "valid": false,
+                    "message": "AYA Pay callback checksum verification failed."
                 }
             },
             {
@@ -319,7 +413,8 @@
                 "content_type": "application/json",
                 "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAiLCJ1c2VyUmVmMSI6eyJjYXJ0Ijo5fX0=\",\"checkSum\":\"79942db8175e4792b75e1a538d91926b407fd12b05ffc44669b2a4f01495ad04\"}",
                 "expected": {
-                    "valid": false
+                    "valid": false,
+                    "message": "AYA Pay callback checksum verification failed."
                 }
             },
             {
@@ -327,7 +422,88 @@
                 "content_type": "application/json",
                 "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwiZGVzY3JpcHRpb24iOiL/In0=\",\"checkSum\":\"0c4d5ccf303c2f367cbc7388a7c83a4b49df68d92151c78bd85a58590a238cf4\"}",
                 "expected": {
-                    "valid": false
+                    "valid": false,
+                    "message": "AYA Pay callback checksum verification failed."
+                }
+            },
+            {
+                "name": "an empty dateTime is accepted",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IiJ9\",\"checkSum\":\"003674d26baaddcf3a45dcd80edfd38929b4f56e6db0fd41a63eb471addee0c0\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "00",
+                    "gateway_reference": "T1",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "a correctly signed \":\" in a value is malformed",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyOjEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAifQ==\",\"checkSum\":\"f3bf1741eb02727543e84e96704ba1ac2e9196966c6eac8a6f4d6715c589f17f\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "AYA Pay callback payload is malformed."
+                }
+            },
+            {
+                "name": "a correctly signed dateTime in another form is malformed",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDdUMTA6MDA6MDAifQ==\",\"checkSum\":\"a71615e692c058a0faebf00a080034033d4bf88cffb62f2a8a61fff03e20887b\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "AYA Pay callback payload is malformed."
+                }
+            },
+            {
+                "name": "a correctly signed empty tranId is malformed",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiIiwiYW1vdW50IjoiMTAwMCIsImN1cnJlbnlDb2RlIjoiMTA0Iiwic3RhdHVzQ29kZSI6IjAwIiwiZGVzY3JpcHRpb24iOiJPcmRlciAxIiwiZGF0ZVRpbWUiOiIyMDI2LTEwLTA3IDEwOjAwOjAwIn0=\",\"checkSum\":\"c1d7b39eb68243c3666521e98b9bdb76d51fe607c0d3b1fac683be43f1580e57\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "AYA Pay callback payload is malformed."
+                }
+            },
+            {
+                "name": "a correctly signed currency other than 104 is malformed",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiI4NDAiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAifQ==\",\"checkSum\":\"e7c81f7e582a4a0b35129aeacf977549f11eff36e4a9b75012cbf94674bf309b\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "AYA Pay callback payload is malformed."
+                }
+            },
+            {
+                "name": "an unsigned currencyCode next to the signed currenyCode is not checked",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAiLCJjdXJyZW5jeUNvZGUiOiJhOmIifQ==\",\"checkSum\":\"469ed0c9b1179e36b526144fda4d9a8187d7877b160006440e8737e0011c4a49\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "00",
+                    "gateway_reference": "T1",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "a wrong checksum is rejected",
+                "content_type": "application/json",
+                "body": "{\"payload\":\"eyJtZXJjaE9yZGVySWQiOiJPUkRFUl8xIiwidHJhbklkIjoiVDEiLCJhbW91bnQiOiIxMDAwIiwiY3VycmVueUNvZGUiOiIxMDQiLCJzdGF0dXNDb2RlIjoiMDAiLCJkZXNjcmlwdGlvbiI6Ik9yZGVyIDEiLCJkYXRlVGltZSI6IjIwMjYtMTAtMDcgMTA6MDA6MDAifQ==\",\"checkSum\":\"0469ed0c9b1179e36b526144fda4d9a8187d7877b160006440e8737e0011c4a49\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "AYA Pay callback checksum verification failed."
+                }
+            },
+            {
+                "name": "a payload that is not a string is rejected",
+                "content_type": "application/json",
+                "body": "{\"payload\":123,\"checkSum\":\"abc\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "AYA Pay callback checksum verification failed."
                 }
             }
         ],
@@ -368,7 +544,8 @@
                 },
                 "body": "{\"orderNumber\":\"ORDER_1\",\"status\":{\"code\":\"SUCCESS\"},\"hashValue\":\"05a1f216fd163fda83bbbc18e7cd6e0ce7662d10aface9c17e066ecdfa01b6db\"}",
                 "expected": {
-                    "valid": false
+                    "valid": false,
+                    "message": "Yoma MMQR callback hash verification failed."
                 }
             },
             {
@@ -391,7 +568,8 @@
                 "headers": {},
                 "body": "{\"orderNumber\":12345,\"status\":\"SUCCESS\",\"hashValue\":\"a4985cb50866542d42675128ae92fee627643d55dd966fea6773cc66842d65e6\"}",
                 "expected": {
-                    "valid": false
+                    "valid": false,
+                    "message": "Yoma MMQR callback has a missing or wrong X-Webhook-Secret header."
                 }
             },
             {
@@ -402,7 +580,8 @@
                 },
                 "body": "{\"orderNumber\":12345,\"status\":\"SUCCESS\",\"hashValue\":\"a4985cb50866542d42675128ae92fee627643d55dd966fea6773cc66842d65e6\"}",
                 "expected": {
-                    "valid": false
+                    "valid": false,
+                    "message": "Yoma MMQR callback has a missing or wrong X-Webhook-Secret header."
                 }
             }
         ],
@@ -451,7 +630,68 @@
                 "content_type": "application/json",
                 "body": "{\"decision\":\"ACCEPT\",\"req_reference_number\":\"ORDER_1\",\"note\":{\"a\":\"b\"},\"signed_field_names\":\"decision,req_reference_number,note,signed_field_names\",\"signature\":\"NbAyxg5BJa/ozb29BXn+6PRUPJKA/etsc5PjwX7GfFc=\"}",
                 "expected": {
-                    "valid": false
+                    "valid": false,
+                    "message": "CyberSource callback signature verification failed."
+                }
+            },
+            {
+                "name": "a signed post whose decision is not signed is malformed",
+                "content_type": "application/x-www-form-urlencoded",
+                "body": "req_reference_number=ORDER_1&signed_field_names=req_reference_number%2Csigned_field_names&signature=A80j31SN7JxTUQ8iFhZoY1VKl6Y%2FPQFMO55z9W20jS8%3D&decision=ACCEPT",
+                "expected": {
+                    "valid": false,
+                    "message": "CyberSource callback is malformed."
+                }
+            },
+            {
+                "name": "a signed post whose req_reference_number is not signed is malformed",
+                "content_type": "application/x-www-form-urlencoded",
+                "body": "decision=ACCEPT&signed_field_names=decision%2Csigned_field_names&signature=li%2B78nO0Yj%2Fgz2bvtgFZk%2FJzzPiC%2BmCjnRokV%2FIn4s0%3D&req_reference_number=ORDER_1",
+                "expected": {
+                    "valid": false,
+                    "message": "CyberSource callback is malformed."
+                }
+            },
+            {
+                "name": "an unknown signed decision is malformed",
+                "content_type": "application/x-www-form-urlencoded",
+                "body": "decision=MAYBE&req_reference_number=ORDER_1&signed_field_names=decision%2Creq_reference_number%2Csigned_field_names&signature=ZXLETZ7z5ZlVNB3lwS2JGHNDKN1tJhAkDjOf3%2FZjqMc%3D",
+                "expected": {
+                    "valid": false,
+                    "message": "CyberSource callback is malformed."
+                }
+            },
+            {
+                "name": "a wrong signature is rejected",
+                "content_type": "application/x-www-form-urlencoded",
+                "body": "decision=DECLINE&req_reference_number=ORDER_1&signed_field_names=decision%2Creq_reference_number%2Csigned_field_names&signature=wd77ARI1hUiWl1ZGpG0pSRkEH9WsCbMgQwIocjl8IhU%3D",
+                "expected": {
+                    "valid": false,
+                    "message": "CyberSource callback signature verification failed."
+                }
+            },
+            {
+                "name": "signed JSON booleans are read as true and false; empty amounts are no amount",
+                "content_type": "application/json",
+                "body": "{\"decision\":\"accept\",\"req_reference_number\":\"ORDER_1\",\"transaction_id\":true,\"auth_amount\":\"\",\"req_amount\":\"\",\"signed_field_names\":\"decision,req_reference_number,transaction_id,auth_amount,req_amount,signed_field_names\",\"signature\":\"OL0sQWQgCypuePBbPXIvTV7JHmidIat7iZKDakoW2M8=\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "ACCEPT",
+                    "gateway_reference": "true"
+                }
+            },
+            {
+                "name": "an empty auth_amount falls back to req_amount",
+                "content_type": "application/x-www-form-urlencoded",
+                "body": "decision=ACCEPT&req_reference_number=ORDER_1&auth_amount=&req_amount=10.50&signed_field_names=decision%2Creq_reference_number%2Cauth_amount%2Creq_amount%2Csigned_field_names&signature=IlLvs2gxR1QzR6nmR2dH6MwMiLT0OUe3T9JylVSn%2BPo%3D",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "ACCEPT",
+                    "amount": "10.50"
                 }
             }
         ]
@@ -1463,6 +1703,1201 @@
                 "field": "additionalField5",
                 "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
                 "error": "The additionalField5 field must not be greater than 50 characters."
+            }
+        ]
+    },
+    "callbacks_source": "Every callback case: expected.valid false means the SDK throws its signature verification error with exactly expected.message. Decoding errors, nested values, non-string signature fields and a signature, hash or checksum mismatch give \"<Gateway> <thing> <signature|hash|checksum> verification failed.\"; checks that run after the signature matched give \"Wave Pay callback is malformed.\", \"AYA Pay {context} payload is malformed.\" or \"CyberSource callback is malformed.\". A missing amount or gateway_reference means none.",
+    "url_validation": {
+        "source": "Every callback, return and cancel URL is checked like PHP FILTER_VALIDATE_URL plus an http/https scheme: printable ASCII only (no whitespace or control characters), \"http://\" or \"https://\" in any case followed by a host; the host is a bracketed IP literal or dot-separated labels of letters, digits and inner \"-\" (1 to 63 characters each, at most 253 in all, one trailing dot allowed); a port is 0 to 65535. User info, path, query and fragment may hold any printable ASCII. An invalid URL gives message for the field.",
+        "field": "callbackUrl",
+        "message": "The callbackUrl field must be a valid http or https URL.",
+        "cases": [
+            {
+                "url": "https://shop.test/cb",
+                "valid": true
+            },
+            {
+                "url": "http://shop.test/cb",
+                "valid": true
+            },
+            {
+                "url": "HTTPS://SHOP.TEST/CB",
+                "valid": true
+            },
+            {
+                "url": "Http://shop.test",
+                "valid": true
+            },
+            {
+                "url": "http://localhost",
+                "valid": true
+            },
+            {
+                "url": "https://a/cb",
+                "valid": true
+            },
+            {
+                "url": "http://localhost:8000/cb?x=1#frag",
+                "valid": true
+            },
+            {
+                "url": "https://shop.test?x",
+                "valid": true
+            },
+            {
+                "url": "https://shop.test#x",
+                "valid": true
+            },
+            {
+                "url": "http://127.0.0.1:8000/cb",
+                "valid": true
+            },
+            {
+                "url": "http://256.1.1.1/cb",
+                "valid": true
+            },
+            {
+                "url": "http://[::1]/cb",
+                "valid": true
+            },
+            {
+                "url": "http://[2001:db8::1]:8080/cb",
+                "valid": true
+            },
+            {
+                "url": "https://shop.test:0/cb",
+                "valid": true
+            },
+            {
+                "url": "https://shop.test:65535/cb",
+                "valid": true
+            },
+            {
+                "url": "https://user:pass@shop.test/cb",
+                "valid": true
+            },
+            {
+                "url": "https://a-b.c-d.test/cb",
+                "valid": true
+            },
+            {
+                "url": "https://1shop.test/cb",
+                "valid": true
+            },
+            {
+                "url": "https://xn--bcher-kva.de/cb",
+                "valid": true
+            },
+            {
+                "url": "https://shop.test./cb",
+                "valid": true
+            },
+            {
+                "url": "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.test/cb",
+                "valid": true
+            },
+            {
+                "url": "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cb",
+                "valid": true
+            },
+            {
+                "url": "https://shop.test/<script>",
+                "valid": true
+            },
+            {
+                "url": "https://shop.test/%zz",
+                "valid": true
+            },
+            {
+                "url": "https://shop.test/cb?a=1&b=~",
+                "valid": true
+            },
+            {
+                "url": "https://shop.test:65536/cb",
+                "valid": false
+            },
+            {
+                "url": "https://shop.test:99999/cb",
+                "valid": false
+            },
+            {
+                "url": "http://example.com:99999/cb",
+                "valid": false
+            },
+            {
+                "url": "https:example.com",
+                "valid": false
+            },
+            {
+                "url": "http:/example.com/cb",
+                "valid": false
+            },
+            {
+                "url": "https:///shop.test",
+                "valid": false
+            },
+            {
+                "url": "https://",
+                "valid": false
+            },
+            {
+                "url": "https://:80/cb",
+                "valid": false
+            },
+            {
+                "url": "//shop.test/cb",
+                "valid": false
+            },
+            {
+                "url": "shop.test/cb",
+                "valid": false
+            },
+            {
+                "url": "ftp://shop.test/cb",
+                "valid": false
+            },
+            {
+                "url": "javascript:alert(1)",
+                "valid": false
+            },
+            {
+                "url": "mailto:a@b.c",
+                "valid": false
+            },
+            {
+                "url": " https://shop.test/cb",
+                "valid": false
+            },
+            {
+                "url": "https://shop.test/cb ",
+                "valid": false
+            },
+            {
+                "url": "https://shop test/cb",
+                "valid": false
+            },
+            {
+                "url": "http://exa mple.com/cb",
+                "valid": false
+            },
+            {
+                "url": "https://shop.test/a b",
+                "valid": false
+            },
+            {
+                "url": "https://shop.test/\tcb",
+                "valid": false
+            },
+            {
+                "url": "https://shop.test/cb\n",
+                "valid": false
+            },
+            {
+                "url": "https://bücher.de/cb",
+                "valid": false
+            },
+            {
+                "url": "http://例え.jp/cb",
+                "valid": false
+            },
+            {
+                "url": "https://shop.test/ü",
+                "valid": false
+            },
+            {
+                "url": "https://shop_test.com/cb",
+                "valid": false
+            },
+            {
+                "url": "http://-bad-.com/cb",
+                "valid": false
+            },
+            {
+                "url": "https://-shop.test/cb",
+                "valid": false
+            },
+            {
+                "url": "https://shop-.test/cb",
+                "valid": false
+            },
+            {
+                "url": "http://a..b/cb",
+                "valid": false
+            },
+            {
+                "url": "https://.shop.test/cb",
+                "valid": false
+            },
+            {
+                "url": "https://shop.test../cb",
+                "valid": false
+            },
+            {
+                "url": "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.test/cb",
+                "valid": false
+            },
+            {
+                "url": "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cb",
+                "valid": false
+            },
+            {
+                "url": "http://[zz]/cb",
+                "valid": false
+            },
+            {
+                "url": "http://[::g]/cb",
+                "valid": false
+            },
+            {
+                "url": "http://[::1",
+                "valid": false
+            }
+        ]
+    },
+    "query_escape": {
+        "source": "Values put in a query string (KBZ Pay callback_info, the Wave Pay redirect's transaction_id) are encoded like Go url.QueryEscape: letters, digits and \"-_.~\" stay, a space becomes \"+\", every other byte is %XX in uppercase hex. KBZ Pay's 512-character callbackInfo limit counts the encoded text.",
+        "cases": [
+            {
+                "input": "a b~*!'()-_.&=/+ñ😀",
+                "escaped": "a+b~%2A%21%27%28%29-_.%26%3D%2F%2B%C3%B1%F0%9F%98%80"
+            },
+            {
+                "input": "~user~",
+                "escaped": "~user~"
+            },
+            {
+                "input": "enc/123+abc",
+                "escaped": "enc%2F123%2Babc"
+            }
+        ]
+    },
+    "ascii_trim": {
+        "source": "Blank checks and trimming use only ASCII whitespace and NUL (\" \\t\\n\\r\\u0000\\u000b\"), like PHP trim(): a no-break space (U+00A0) or a byte order mark is a character, not whitespace. env: the value read for KBZ_PAY_APP_ID (app_id null means the missing-setting error); kbz_pay_order_id: the errors of a KBZ Pay payment with that orderId (amount 1000, callbackUrl https://shop.test/cb). Callback bodies, statuses and tokens follow the same rule (see the kbz_pay callbacks).",
+        "env": [
+            {
+                "value": " ",
+                "app_id": " "
+            },
+            {
+                "value": " kp123 ",
+                "app_id": " kp123 "
+            },
+            {
+                "value": " \t\n\r\u000bkp123 \t\n\r\u000b",
+                "app_id": "kp123"
+            },
+            {
+                "value": " \t\n\r\u000b",
+                "app_id": null,
+                "message": "The kbz_pay configuration is missing [app_id]."
+            },
+            {
+                "value": "﻿",
+                "app_id": "﻿"
+            }
+        ],
+        "kbz_pay_order_id": [
+            {
+                "order_id": " ",
+                "errors": {
+                    "orderId": "The orderId field may only contain letters, numbers and underscores."
+                }
+            },
+            {
+                "order_id": " \t\n\r\u000b\u0000",
+                "errors": {
+                    "orderId": "The orderId field is required."
+                }
+            },
+            {
+                "order_id": " ORDER_1",
+                "errors": {
+                    "orderId": "The orderId field may only contain letters, numbers and underscores."
+                }
+            }
+        ]
+    },
+    "config_setting_types": {
+        "source": "String settings given in code (PHP fromArray, Node options, Python mappings) accept text and integers: an integer becomes its decimal text. Floats, booleans and blank text count as missing. Checked on cyber_source.profile_id with the rest of config.",
+        "gateway": "cyber_source",
+        "config": {
+            "profile_id": "profile",
+            "access_key": "access",
+            "secret_key": "test-secret",
+            "base_url": "https://secureacceptance.cybersource.com"
+        },
+        "key": "profile_id",
+        "cases": [
+            {
+                "value": 12345,
+                "result": "12345"
+            },
+            {
+                "value": 0,
+                "result": "0"
+            },
+            {
+                "value": -7,
+                "result": "-7"
+            },
+            {
+                "value": "12345",
+                "result": "12345"
+            },
+            {
+                "value": " profile ",
+                "result": " profile "
+            },
+            {
+                "value": 12.5,
+                "result": null
+            },
+            {
+                "value": true,
+                "result": null
+            },
+            {
+                "value": false,
+                "result": null
+            },
+            {
+                "value": "",
+                "result": null
+            },
+            {
+                "value": "  ",
+                "result": null
+            },
+            {
+                "value": null,
+                "result": null
+            }
+        ],
+        "message": "The cyber_source configuration is missing [profile_id]."
+    },
+    "config_integer_limits": {
+        "source": "Whole-number settings (the HTTP timeout and the time to live) hold at most 2147483647 (2^31 - 1); a larger value is invalid, never clamped. Each case sets one variable over config.env; seconds is the value read, otherwise key and message name the ConfigurationException.",
+        "cases": [
+            {
+                "gateway": "kbz_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "2147483647",
+                "seconds": 2147483647
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "0002147483647",
+                "seconds": 2147483647
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "2147483648",
+                "key": "timeout_in_seconds",
+                "message": "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "99999999999999999999",
+                "key": "timeout_in_seconds",
+                "message": "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "aya_pay",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "2147483648",
+                "key": "timeout_in_seconds",
+                "message": "The aya_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS",
+                "value": "2147483647",
+                "seconds": 2147483647
+            },
+            {
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS",
+                "value": "2147483648",
+                "key": "time_to_live_in_seconds",
+                "message": "The wave_pay configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES",
+                "value": "99999999999999999999",
+                "key": "time_to_live_in_minutes",
+                "message": "The kbz_pay configuration [time_to_live_in_minutes] must be a whole number from 1 to 120."
+            }
+        ]
+    },
+    "config_validation_order": {
+        "source": "When several settings are wrong, the first error is the same everywhere: the required strings in the order config.errors lists them, then the time to live (missing, not a whole number, out of range), then the HTTP timeout. Each case applies env over config.env (null removes the variable).",
+        "cases": [
+            {
+                "gateway": "kbz_pay",
+                "env": {
+                    "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES": "200",
+                    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "abc"
+                },
+                "key": "time_to_live_in_minutes",
+                "message": "The kbz_pay configuration [time_to_live_in_minutes] must be a whole number from 1 to 120."
+            },
+            {
+                "gateway": "kbz_pay",
+                "env": {
+                    "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES": null,
+                    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "abc"
+                },
+                "key": "time_to_live_in_minutes",
+                "message": "The kbz_pay configuration is missing [time_to_live_in_minutes]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "env": {
+                    "KBZ_PAY_BASE_URL": null,
+                    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "abc"
+                },
+                "key": "api_url",
+                "message": "The kbz_pay configuration is missing [api_url]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "env": {
+                    "KBZ_PAY_PWA_BASE_REDIRECT_URL": " ",
+                    "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES": "0"
+                },
+                "key": "pwa_url",
+                "message": "The kbz_pay configuration is missing [pwa_url]."
+            },
+            {
+                "gateway": "wave_pay",
+                "env": {
+                    "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS": "0",
+                    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "abc"
+                },
+                "key": "time_to_live_in_seconds",
+                "message": "The wave_pay configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "wave_pay",
+                "env": {
+                    "WAVE_PAY_BASE_REDIRECT_URL": null,
+                    "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS": "abc"
+                },
+                "key": "base_redirect_url",
+                "message": "The wave_pay configuration is missing [base_redirect_url]."
+            },
+            {
+                "gateway": "aya_pay",
+                "env": {
+                    "AYA_PAY_BASE_URL": null,
+                    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "abc"
+                },
+                "key": "base_url",
+                "message": "The aya_pay configuration is missing [base_url]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "env": {
+                    "YOMA_MMQR_WEBHOOK_SECRET": null,
+                    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "abc"
+                },
+                "key": "webhook_secret",
+                "message": "The yoma_mmqr configuration is missing [webhook_secret]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "env": {
+                    "YOMA_MMQR_BASE_URL": null,
+                    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "-1"
+                },
+                "key": "base_url",
+                "message": "The yoma_mmqr configuration is missing [base_url]."
+            }
+        ]
+    },
+    "negative_amounts": {
+        "source": "A negative whole-number amount never throws on its own: validation collects it with every other error as \"The {field} field must not be negative.\" (items.{i}.amount for a Wave Pay item). errors lists the fields in validation order. Data keys are the snake_case names of each payment data field; method and transaction_type are the enum values.",
+        "cases": [
+            {
+                "gateway": "kbz_pay",
+                "data": {
+                    "order_id": "",
+                    "amount": -1,
+                    "callback_url": "https://shop.test/cb"
+                },
+                "errors": {
+                    "orderId": "The orderId field is required.",
+                    "amount": "The amount field must not be negative."
+                }
+            },
+            {
+                "gateway": "wave_pay",
+                "data": {
+                    "order_id": "",
+                    "callback_url": "https://shop.test/cb",
+                    "return_url": "https://shop.test/done",
+                    "description": "Order 1",
+                    "items": [
+                        [
+                            "A",
+                            10
+                        ],
+                        [
+                            "B",
+                            -5
+                        ]
+                    ],
+                    "merchant_reference_id": "ref-001"
+                },
+                "errors": {
+                    "orderId": "The orderId field is required.",
+                    "items.1.amount": "The items.1.amount field must not be negative."
+                }
+            },
+            {
+                "gateway": "wave_pay",
+                "data": {
+                    "order_id": "ORDER_1",
+                    "callback_url": "not a url",
+                    "return_url": "https://shop.test/done",
+                    "description": "Order 1",
+                    "items": [
+                        [
+                            "A",
+                            10
+                        ]
+                    ],
+                    "amount": -1,
+                    "merchant_reference_id": "ref-001"
+                },
+                "errors": {
+                    "callbackUrl": "The callbackUrl field must be a valid http or https URL.",
+                    "amount": "The amount field must not be negative."
+                }
+            },
+            {
+                "gateway": "aya_pay",
+                "data": {
+                    "order_id": "ORD",
+                    "amount": -1,
+                    "channel": "aya_pay",
+                    "method": "QR"
+                },
+                "errors": {
+                    "orderId": "The orderId field must be between 6 and 40 characters.",
+                    "amount": "The amount field must not be negative."
+                }
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "data": {
+                    "order_id": "ORDER_1",
+                    "amount": -1,
+                    "description": ""
+                },
+                "errors": {
+                    "amount": "The amount field must not be negative.",
+                    "description": "The description field is required."
+                }
+            },
+            {
+                "gateway": "cyber_source",
+                "data": {
+                    "order_id": "ORDER_1",
+                    "amount": -1,
+                    "callback_url": "https://shop.test/cb",
+                    "currency": "mmk",
+                    "transaction_type": "sale",
+                    "locale": "en-us"
+                },
+                "errors": {
+                    "amount": "The amount field must not be negative.",
+                    "currency": "The currency field may only contain a three letter ISO 4217 code."
+                }
+            }
+        ]
+    },
+    "wave_pay_validation": {
+        "source": "Wave Pay payment data rules. Each case applies data over this data (snake_case field names; an item is [name, amount] where a string amount is parsed as a decimal); errors lists the fields in validation order: orderId, callbackUrl, returnUrl, description, items, merchantReferenceId, merchantName, timeToLiveSeconds, additionalField3 to additionalField5, then each item's name and amount, then amount. Without amount, the total is the exact sum of the items: no items gives \"The amount field is required.\", and an item amount that is invalid or has decimals skips the total check (the item's own error is reported).",
+        "data": {
+            "order_id": "ORDER_1",
+            "merchant_reference_id": "ref-001",
+            "callback_url": "https://shop.test/cb",
+            "return_url": "https://shop.test/done",
+            "description": "Order 1",
+            "items": [
+                [
+                    "A",
+                    1000
+                ]
+            ]
+        },
+        "cases": [
+            {
+                "name": "no items and no amount",
+                "data": {
+                    "items": []
+                },
+                "errors": {
+                    "items": "The items field must have at least one item.",
+                    "amount": "The amount field is required."
+                }
+            },
+            {
+                "name": "no items with an amount",
+                "data": {
+                    "items": [],
+                    "amount": 1000
+                },
+                "errors": {
+                    "items": "The items field must have at least one item."
+                }
+            },
+            {
+                "name": "an item amount with decimals skips the total",
+                "data": {
+                    "items": [
+                        [
+                            "A",
+                            "0.5"
+                        ]
+                    ]
+                },
+                "errors": {
+                    "items.0.amount": "Wave Pay does not accept decimal amounts; the items.0.amount field must be a whole number."
+                }
+            },
+            {
+                "name": "a negative item amount skips the total",
+                "data": {
+                    "items": [
+                        [
+                            "A",
+                            10
+                        ],
+                        [
+                            "B",
+                            -1
+                        ]
+                    ]
+                },
+                "errors": {
+                    "items.1.amount": "The items.1.amount field must not be negative."
+                }
+            },
+            {
+                "name": "items that sum to zero",
+                "data": {
+                    "items": [
+                        [
+                            "A",
+                            0
+                        ]
+                    ]
+                },
+                "errors": {
+                    "items.0.amount": "The items.0.amount field must be greater than 0.",
+                    "amount": "The amount field must be greater than 0."
+                }
+            },
+            {
+                "name": "a given amount with decimals",
+                "data": {
+                    "amount": "10.5"
+                },
+                "errors": {
+                    "amount": "Wave Pay does not accept decimal amounts; the amount field must be a whole number."
+                }
+            },
+            {
+                "name": "items and amount are checked after the other fields",
+                "data": {
+                    "items": [
+                        [
+                            "",
+                            "0.5"
+                        ]
+                    ],
+                    "merchant_reference_id": "bad ref",
+                    "additional_field_3": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                },
+                "errors": {
+                    "merchantReferenceId": "The merchantReferenceId field may only contain letters, numbers, underscores and dashes.",
+                    "additionalField3": "The additionalField3 field must not be greater than 50 characters.",
+                    "items.0.name": "The items.0.name field is required.",
+                    "items.0.amount": "Wave Pay does not accept decimal amounts; the items.0.amount field must be a whole number."
+                }
+            },
+            {
+                "name": "every field in order",
+                "data": {
+                    "order_id": "",
+                    "callback_url": "x",
+                    "return_url": "",
+                    "description": "",
+                    "items": [
+                        [
+                            "",
+                            0
+                        ]
+                    ],
+                    "merchant_reference_id": "bad ref",
+                    "merchant_name": " ",
+                    "time_to_live_in_seconds": 0,
+                    "additional_field_5": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                },
+                "errors": {
+                    "orderId": "The orderId field is required.",
+                    "callbackUrl": "The callbackUrl field must be a valid http or https URL.",
+                    "returnUrl": "The returnUrl field is required.",
+                    "description": "The description field is required.",
+                    "merchantReferenceId": "The merchantReferenceId field may only contain letters, numbers, underscores and dashes.",
+                    "merchantName": "The merchantName field is required.",
+                    "timeToLiveSeconds": "The timeToLiveSeconds field must be greater than 0.",
+                    "additionalField5": "The additionalField5 field must not be greater than 50 characters.",
+                    "items.0.name": "The items.0.name field is required.",
+                    "items.0.amount": "The items.0.amount field must be greater than 0.",
+                    "amount": "The amount field must be greater than 0."
+                }
+            }
+        ]
+    },
+    "wave_pay_exact_amount": {
+        "source": "Amounts are exact: the JSON body carries the amount and each item amount as JSON numbers with every digit, with no integer limit, and the total is the exact sum of the items. amount_json is the exact JSON text of the body's amount member; items is the exact items string.",
+        "config": {
+            "merchant_id": "testmerchantID",
+            "secret_key": "test-secret",
+            "merchant_name": "Shop",
+            "base_url": "https://preprodpayments.wavemoney.io:8107",
+            "base_redirect_url": "https://preprodpayments.wavemoney.io:8107",
+            "time_to_live_in_seconds": 500
+        },
+        "data": {
+            "order_id": "ORDER_1",
+            "merchant_reference_id": "ref-001",
+            "callback_url": "https://shop.test/wave/callback",
+            "return_url": "https://shop.test/done",
+            "description": "Order 1",
+            "items": [
+                [
+                    "Big",
+                    "99999999999999999999"
+                ],
+                [
+                    "Small",
+                    "1"
+                ]
+            ]
+        },
+        "expected": {
+            "amount_json": "100000000000000000000",
+            "items": "[{\"name\":\"Big\",\"amount\":99999999999999999999},{\"name\":\"Small\",\"amount\":1}]",
+            "hash": "63b55324acf5ec923da26e3d42947481e7b3b4eac15cfd985b5b404f14b230a7"
+        }
+    },
+    "wave_pay_errors": {
+        "source": "A failed Wave Pay payment request throws the API error \"Wave Pay payment request failed with HTTP {status}: {gateway_message}\". Field errors count only when errors is a JSON object: \"field: messages\" pairs sorted by field and joined with \"; \", each entry a list of messages (joined with \" \") or a single one, objects skipped; otherwise message, or \"unexpected response\". gateway_code is VALIDATION_ERROR whenever the errors key is present (even null), else message. Uses wave_pay_request.config and wave_pay_limits.data.",
+        "cases": [
+            {
+                "status": 422,
+                "body": "{\"message\":\"The given data was invalid.\",\"errors\":{\"order_id\":[\"required\",\"too long\"],\"amount\":\"too small\"}}",
+                "gateway_code": "VALIDATION_ERROR",
+                "gateway_message": "amount: too small; order_id: required too long"
+            },
+            {
+                "status": 422,
+                "body": "{\"message\":\"x\",\"errors\":{\"b\":{\"nested\":\"x\"},\"a\":[\"ok\",{\"nested\":\"x\"},5,true]}}",
+                "gateway_code": "VALIDATION_ERROR",
+                "gateway_message": "a: ok 5 true; b: "
+            },
+            {
+                "status": 400,
+                "body": "{\"message\":\"Bad request\",\"errors\":null}",
+                "gateway_code": "VALIDATION_ERROR",
+                "gateway_message": "Bad request"
+            },
+            {
+                "status": 400,
+                "body": "{\"message\":\"Bad request\",\"errors\":[\"x\"]}",
+                "gateway_code": "VALIDATION_ERROR",
+                "gateway_message": "Bad request"
+            },
+            {
+                "status": 400,
+                "body": "{\"message\":\"Bad request\",\"errors\":\"x\"}",
+                "gateway_code": "VALIDATION_ERROR",
+                "gateway_message": "Bad request"
+            },
+            {
+                "status": 200,
+                "body": "{\"message\":\"FAILED\"}",
+                "gateway_code": "FAILED",
+                "gateway_message": "FAILED"
+            },
+            {
+                "status": 200,
+                "body": "{\"message\":\"success\",\"transaction_id\":\"\"}",
+                "gateway_code": "success",
+                "gateway_message": "success"
+            },
+            {
+                "status": 500,
+                "body": "Server Error",
+                "gateway_code": null,
+                "gateway_message": "unexpected response"
+            }
+        ]
+    },
+    "aya_pay_services": {
+        "source": "AYA Pay services(): data and each service's methods are read only when they are JSON lists; a service whose key is missing, empty or not a scalar is skipped; scalar fields are read as text (booleans as true/false); name falls back to key; image_url is null unless it is a scalar; method entries that are not scalars are skipped and unknown ones are listed in unknown_methods. A failed call with status \"\" has no gateway_code.",
+        "cases": [
+            {
+                "name": "scalar reads and list rules",
+                "body": "{\"status\":\"00\",\"message\":\"success\",\"data\":[{\"name\":\"\",\"key\":\"aya_pay\",\"image_url\":{\"src\":\"x\"},\"methods\":[\"QR\",null,{\"m\":\"WEB\"},\"FOO\",true,\"NOTI\"]},{\"name\":\"Visa\",\"key\":true,\"image_url\":\"https://img.test/visa.png\",\"methods\":\"WEB\"},{\"name\":\"No key\",\"methods\":[\"WEB\"]},{\"name\":\"Nested key\",\"key\":[\"x\"]},\"not an object\"]}",
+                "services": [
+                    {
+                        "name": "aya_pay",
+                        "key": "aya_pay",
+                        "image_url": null,
+                        "methods": [
+                            "QR",
+                            "NOTI"
+                        ],
+                        "unknown_methods": [
+                            "FOO",
+                            "true"
+                        ]
+                    },
+                    {
+                        "name": "Visa",
+                        "key": "true",
+                        "image_url": "https://img.test/visa.png",
+                        "methods": [],
+                        "unknown_methods": []
+                    }
+                ]
+            },
+            {
+                "name": "data that is an object is no list",
+                "body": "{\"status\":\"00\",\"data\":{\"a\":{\"name\":\"AYA Pay\",\"key\":\"aya_pay\",\"methods\":[\"QR\"]}}}",
+                "services": []
+            },
+            {
+                "name": "a status of \"\" is no gateway code",
+                "status": 200,
+                "body": "{\"status\":\"\",\"message\":\"Invalid\"}",
+                "error": {
+                    "message": "AYA Pay services failed with HTTP 200.",
+                    "gateway_code": null,
+                    "gateway_message": "Invalid"
+                }
+            },
+            {
+                "name": "a numeric status is read as its text",
+                "status": 200,
+                "body": "{\"status\":12,\"message\":\"Invalid\"}",
+                "error": {
+                    "message": "AYA Pay services failed: [12] Invalid",
+                    "gateway_code": "12",
+                    "gateway_message": "Invalid"
+                }
+            }
+        ]
+    },
+    "yoma_mmqr_responses": {
+        "source": "Yoma MMQR response reads. Each case calls status(argument) or renew_qr(argument) on a gateway built from config.env with responses served in order (the first is the token). errorCode \"\" (or a non-scalar) is no error; the message is errorDescription, or error_description when that is empty; \"\" is no message; the token call uses error and error_description the same way. qrString and refLabel are read as text (booleans as true/false) and must not be empty.",
+        "cases": [
+            {
+                "name": "an empty errorCode is no error",
+                "call": "status",
+                "argument": "R1",
+                "responses": [
+                    {
+                        "status": 200,
+                        "body": "{\"access_token\":\"t\",\"expires_in\":28800}"
+                    },
+                    {
+                        "status": 200,
+                        "body": "{\"errorCode\":\"\",\"paymentStatus\":\"success\",\"refLabel\":\"R1\"}"
+                    }
+                ],
+                "result": {
+                    "status": "successful",
+                    "gateway_status": "success",
+                    "gateway_reference": "R1"
+                }
+            },
+            {
+                "name": "a nested errorCode is no error",
+                "call": "status",
+                "argument": "R1",
+                "responses": [
+                    {
+                        "status": 200,
+                        "body": "{\"access_token\":\"t\"}"
+                    },
+                    {
+                        "status": 200,
+                        "body": "{\"errorCode\":{\"code\":\"E1\"},\"paymentStatus\":\"PENDING\"}"
+                    }
+                ],
+                "result": {
+                    "status": "pending",
+                    "gateway_status": "PENDING",
+                    "gateway_reference": "R1"
+                }
+            },
+            {
+                "name": "an empty errorDescription falls back to error_description",
+                "call": "status",
+                "argument": "R1",
+                "responses": [
+                    {
+                        "status": 200,
+                        "body": "{\"access_token\":\"t\"}"
+                    },
+                    {
+                        "status": 200,
+                        "body": "{\"errorCode\":\"E1\",\"errorDescription\":\"\",\"error_description\":\"Fallback\"}"
+                    }
+                ],
+                "error": {
+                    "message": "Yoma MMQR payment/check-status failed: [E1] Fallback",
+                    "gateway_code": "E1",
+                    "gateway_message": "Fallback"
+                }
+            },
+            {
+                "name": "a boolean errorDescription is its text",
+                "call": "status",
+                "argument": "R1",
+                "responses": [
+                    {
+                        "status": 200,
+                        "body": "{\"access_token\":\"t\"}"
+                    },
+                    {
+                        "status": 400,
+                        "body": "{\"errorCode\":500,\"errorDescription\":true}"
+                    }
+                ],
+                "error": {
+                    "message": "Yoma MMQR payment/check-status failed: [500] true",
+                    "gateway_code": "500",
+                    "gateway_message": "true"
+                }
+            },
+            {
+                "name": "no message at all",
+                "call": "status",
+                "argument": "R1",
+                "responses": [
+                    {
+                        "status": 200,
+                        "body": "{\"access_token\":\"t\"}"
+                    },
+                    {
+                        "status": 400,
+                        "body": "{\"errorCode\":\"E1\",\"errorDescription\":\"\",\"error_description\":\"\"}"
+                    }
+                ],
+                "error": {
+                    "message": "Yoma MMQR payment/check-status failed: [E1]",
+                    "gateway_code": "E1",
+                    "gateway_message": null
+                }
+            },
+            {
+                "name": "an empty token error is no code",
+                "call": "status",
+                "argument": "R1",
+                "responses": [
+                    {
+                        "status": 401,
+                        "body": "{\"error\":\"\",\"error_description\":\"Bad client\"}"
+                    }
+                ],
+                "error": {
+                    "message": "Yoma MMQR token failed with HTTP 401.",
+                    "gateway_code": null,
+                    "gateway_message": "Bad client"
+                }
+            },
+            {
+                "name": "a token error code",
+                "call": "status",
+                "argument": "R1",
+                "responses": [
+                    {
+                        "status": 400,
+                        "body": "{\"error\":\"invalid_client\",\"errorDescription\":\"\",\"error_description\":\"Bad client\"}"
+                    }
+                ],
+                "error": {
+                    "message": "Yoma MMQR token failed: [invalid_client] Bad client",
+                    "gateway_code": "invalid_client",
+                    "gateway_message": "Bad client"
+                }
+            },
+            {
+                "name": "boolean qrString and refLabel are their text",
+                "call": "renew_qr",
+                "argument": "ORDER_1",
+                "responses": [
+                    {
+                        "status": 200,
+                        "body": "{\"access_token\":\"t\"}"
+                    },
+                    {
+                        "status": 200,
+                        "body": "{\"qrString\":true,\"refLabel\":false}"
+                    }
+                ],
+                "result": {
+                    "qr_image": "true",
+                    "reference": "false"
+                }
+            },
+            {
+                "name": "a numeric refLabel is its text",
+                "call": "renew_qr",
+                "argument": "ORDER_1",
+                "responses": [
+                    {
+                        "status": 200,
+                        "body": "{\"access_token\":\"t\"}"
+                    },
+                    {
+                        "status": 200,
+                        "body": "{\"qrString\":\"000201\",\"refLabel\":1234}"
+                    }
+                ],
+                "result": {
+                    "qr_image": "000201",
+                    "reference": "1234"
+                }
+            },
+            {
+                "name": "an empty refLabel is no QR",
+                "call": "renew_qr",
+                "argument": "ORDER_1",
+                "responses": [
+                    {
+                        "status": 200,
+                        "body": "{\"access_token\":\"t\"}"
+                    },
+                    {
+                        "status": 200,
+                        "body": "{\"qrString\":\"000201\",\"refLabel\":\"\"}"
+                    }
+                ],
+                "error": {
+                    "message": "Yoma MMQR did not return a QR.",
+                    "gateway_code": null,
+                    "gateway_message": null
+                }
+            },
+            {
+                "name": "a nested qrString is no QR",
+                "call": "renew_qr",
+                "argument": "ORDER_1",
+                "responses": [
+                    {
+                        "status": 200,
+                        "body": "{\"access_token\":\"t\"}"
+                    },
+                    {
+                        "status": 200,
+                        "body": "{\"qrString\":[\"000201\"],\"refLabel\":\"R1\"}"
+                    }
+                ],
+                "error": {
+                    "message": "Yoma MMQR did not return a QR.",
+                    "gateway_code": null,
+                    "gateway_message": null
+                }
+            }
+        ]
+    },
+    "kbz_pay_responses": {
+        "source": "KBZ Pay response reads: scalars are read as text (booleans as true/false, numbers as sent), objects and lists as missing; trade_status is trimmed of ASCII whitespace; an empty merch_order_id falls back to the order id asked for; qrCode and prepay_id must be non-empty text. Each case answers status(\"ORDER_1\") or qr() of a KBZ Pay payment (ORDER_1, 1000, https://shop.test/cb) on a gateway built from config.env.",
+        "cases": [
+            {
+                "name": "status scalar reads",
+                "call": "status",
+                "body": "{\"Response\":{\"result\":\"SUCCESS\",\"code\":0,\"msg\":\"success\",\"merch_order_id\":\"\",\"mm_order_id\":{\"id\":\"MM1\"},\"total_amount\":1000.50,\"trade_status\":\" PAY_SUCCESS\\t\"}}",
+                "result": {
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "PAY_SUCCESS",
+                    "gateway_reference": null,
+                    "amount": "1000.50"
+                }
+            },
+            {
+                "name": "status booleans are their text",
+                "call": "status",
+                "body": "{\"Response\":{\"result\":\"SUCCESS\",\"code\":\"0\",\"merch_order_id\":true,\"mm_order_id\":false,\"trade_status\":true}}",
+                "result": {
+                    "order_id": "true",
+                    "status": "unknown",
+                    "gateway_status": "true",
+                    "gateway_reference": "false",
+                    "amount": null
+                }
+            },
+            {
+                "name": "a nested message is no message",
+                "call": "status",
+                "body": "{\"Response\":{\"result\":\"FAIL\",\"code\":\"E1\",\"msg\":{\"text\":\"x\"}}}",
+                "error": {
+                    "message": "KBZ Pay queryorder failed: [E1]",
+                    "gateway_code": "E1",
+                    "gateway_message": null
+                }
+            },
+            {
+                "name": "a numeric code is its text",
+                "call": "status",
+                "body": "{\"Response\":{\"result\":\"FAIL\",\"code\":12,\"msg\":\"Bad\"}}",
+                "error": {
+                    "message": "KBZ Pay queryorder failed: [12] Bad",
+                    "gateway_code": "12",
+                    "gateway_message": "Bad"
+                }
+            },
+            {
+                "name": "a numeric prepay_id and a boolean qrCode are their text",
+                "call": "qr",
+                "body": "{\"Response\":{\"result\":\"SUCCESS\",\"code\":\"0\",\"prepay_id\":12345,\"qrCode\":true}}",
+                "result": {
+                    "qr_string": "true",
+                    "reference": "12345"
+                }
+            },
+            {
+                "name": "a nested qrCode is no QR code",
+                "call": "qr",
+                "body": "{\"Response\":{\"result\":\"SUCCESS\",\"code\":\"0\",\"prepay_id\":\"P1\",\"qrCode\":{\"x\":1}}}",
+                "error": {
+                    "message": "KBZ Pay did not return a QR code.",
+                    "gateway_code": null,
+                    "gateway_message": null
+                }
+            },
+            {
+                "name": "an empty prepay_id is no order",
+                "call": "qr",
+                "body": "{\"Response\":{\"result\":\"SUCCESS\",\"code\":\"0\",\"prepay_id\":\"\",\"qrCode\":\"qr\"}}",
+                "error": {
+                    "message": "KBZ Pay did not return a prepay_id.",
+                    "gateway_code": null,
+                    "gateway_message": null
+                }
             }
         ]
     }

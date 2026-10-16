@@ -40,7 +40,7 @@ from ._support import (
     safe_equal,
     trim_url,
 )
-from ._validate import AmountRule, Validator
+from ._validate import AmountRule, Validator, is_int
 from ._values import get, is_nested, optional, scalar_string, trimmed
 
 __all__ = [
@@ -86,9 +86,9 @@ class WavePayConfig:
     def __init__(
         self,
         *,
-        merchant_id: str = "",
-        secret_key: str = "",
-        merchant_name: str = "",
+        merchant_id: str | int = "",
+        secret_key: str | int = "",
+        merchant_name: str | int = "",
         time_to_live_seconds: int | str | None = None,
         timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
         base_url: str = "",
@@ -273,10 +273,15 @@ class _WavePayBase:
             .string("merchant_reference_id", data.merchant_reference_id)
             .max("merchant_reference_id", data.merchant_reference_id, 100)
             .pattern("merchant_reference_id", data.merchant_reference_id, _ID, _ID_DESCRIPTION)
-            .positive("time_to_live_seconds", data.time_to_live_seconds)
         )
         if data.merchant_name is not None:
             validator.required("merchant_name", data.merchant_name)
+        ttl = data.time_to_live_seconds
+        validator.when(
+            ttl is not None and not is_int(ttl),
+            "time_to_live_seconds",
+            "The time_to_live_seconds field must be an integer.",
+        ).positive("time_to_live_seconds", ttl)
         for name in _ADDITIONAL_FIELDS:
             validator.string(name, getattr(data, name)).max(name, getattr(data, name), 50)
         for index, item in enumerate(items):
@@ -293,10 +298,11 @@ class _WavePayBase:
 
         ``order_id`` falls back to ``merchantReferenceId`` when ``orderId`` is
         missing, null or empty, as a safeguard: earlier Wave documents marked
-        ``orderId`` optional. A
-        callback whose amount is not a non-negative decimal, or whose ``orderId`` or
-        ``merchantReferenceId`` holds anything but letters, numbers, ``_`` and
-        ``-``, fails verification too.
+        ``orderId`` optional. A nested hashed value or a wrong hash fails with
+        "Wave Pay callback hash verification failed."; a correctly hashed callback
+        whose amount is not a non-negative decimal, that has neither id, or whose
+        ``orderId`` or ``merchantReferenceId`` holds anything but letters, numbers,
+        ``_`` and ``-`` fails with "Wave Pay callback is malformed.".
         """
         payload = lossless_body(request)
         nested = any(is_nested(payload.get(name)) for name in _CALLBACK_FIELDS)
@@ -307,18 +313,24 @@ class _WavePayBase:
         expected = self._hash(parts)
         hash_value = payload.get("hashValue")
 
-        order_id = get(payload, "orderId")
-        reference_id = get(payload, "merchantReferenceId")
         if (
             nested
             or not isinstance(hash_value, str)
             or not safe_equal(expected, hash_value.lower())
-            or _AMOUNT.fullmatch(get(payload, "amount")) is None
+        ):
+            raise SignatureVerificationError(
+                "Wave Pay callback hash verification failed.", to_plain_object(payload)
+            )
+
+        order_id = get(payload, "orderId")
+        reference_id = get(payload, "merchantReferenceId")
+        if (
+            _AMOUNT.fullmatch(get(payload, "amount")) is None
             or (order_id or reference_id) == ""
             or any(_ID.fullmatch(value) is None for value in (order_id, reference_id) if value)
         ):
             raise SignatureVerificationError(
-                "Wave Pay callback hash verification failed.", to_plain_object(payload)
+                "Wave Pay callback is malformed.", to_plain_object(payload)
             )
 
         gateway_status = trimmed(payload, "status")

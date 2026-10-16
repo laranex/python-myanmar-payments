@@ -9,8 +9,11 @@ import pytest
 
 from python_myanmar_payments import (
     Amount,
+    ApiError,
+    AsyncAyaPay,
     AsyncKbzPay,
     AsyncWavePay,
+    AsyncYomaMmqr,
     AyaPay,
     AyaPayConfig,
     AyaPayMethod,
@@ -19,6 +22,7 @@ from python_myanmar_payments import (
     ConfigurationError,
     CyberSource,
     CyberSourceConfig,
+    CyberSourcePaymentData,
     FormField,
     FormPayment,
     InvalidPaymentDataError,
@@ -34,7 +38,9 @@ from python_myanmar_payments import (
     WavePayPaymentData,
     YomaMmqr,
     YomaMmqrConfig,
+    YomaMmqrPaymentData,
 )
+from python_myanmar_payments._validate import Validator
 from tests.helpers import FakeServer, fixture, gateway_config, make, run
 
 VECTORS = fixture("parity/vectors.json")
@@ -84,8 +90,9 @@ def test_callbacks(gateway: str, case: dict[str, Any]) -> None:
     expected = case["expected"]
     handle = gateways()[gateway].handle_callback
     if not expected["valid"]:
-        with pytest.raises(SignatureVerificationError):
+        with pytest.raises(SignatureVerificationError) as info:
             handle(request)
+        assert str(info.value) == expected["message"]
         return
     callback: PaymentCallback = handle(request)
     assert callback.order_id == expected["order_id"]
@@ -431,3 +438,319 @@ def test_kbz_pay_time_to_live(mode: str, case: dict[str, Any]) -> None:
     biz = server.last().json()["Request"]["biz_content"]
     assert biz["timeout_express"] == case["timeout_express"]
     assert payment.expires_at is not None
+
+
+def snake_errors(errors: dict[str, str]) -> list[tuple[str, str]]:
+    """The vector's errors with Python's snake_case field names, in validation order."""
+    return [
+        (snake(field), message.replace(field, snake(field))) for field, message in errors.items()
+    ]
+
+
+def found(validate: Any, data: Any) -> list[tuple[str, str]]:
+    """The errors ``validate`` raises for ``data``, in the order they were found."""
+    try:
+        validate(data)
+    except InvalidPaymentDataError as error:
+        return list(error.errors.items())
+    return []
+
+
+def env_with(changes: dict[str, str | None]) -> dict[str, str]:
+    env = dict(CONFIG_ENV)
+    for variable, value in changes.items():
+        if value is None:
+            env.pop(variable, None)
+        else:
+            env[variable] = value
+    return env
+
+
+def assert_api_error(info: pytest.ExceptionInfo[ApiError], error: dict[str, Any]) -> None:
+    assert (str(info.value), info.value.gateway_code, info.value.gateway_message) == (
+        error["message"],
+        error["gateway_code"],
+        error["gateway_message"],
+    )
+
+
+URL_VALIDATION = VECTORS["url_validation"]
+
+
+@pytest.mark.parametrize("case", URL_VALIDATION["cases"], ids=lambda case: repr(case["url"]))
+def test_url_validation(case: dict[str, Any]) -> None:
+    field = URL_VALIDATION["field"]
+    errors = found(lambda url: Validator().url(snake(field), url).validate(), case["url"])
+    expected = {} if case["valid"] else {field: URL_VALIDATION["message"]}
+    assert errors == snake_errors(expected)
+
+
+@pytest.mark.parametrize("case", VECTORS["query_escape"]["cases"], ids=lambda case: case["input"])
+def test_query_escape(mode: str, case: dict[str, Any]) -> None:
+    kbz = FakeServer(
+        {"Response": {"result": "SUCCESS", "code": "0", "prepay_id": "P1", "qrCode": "qr"}}
+    )
+    run(
+        make(mode, KbzPay, AsyncKbzPay, KbzPayConfig.from_env(CONFIG_ENV), kbz).qr(
+            KbzPayPaymentData(
+                order_id="ORDER_1",
+                amount=1000,
+                callback_url="https://shop.test/cb",
+                callback_info=case["input"],
+            )
+        )
+    )
+    assert kbz.last().json()["Request"]["biz_content"]["callback_info"] == case["escaped"]
+
+    wave = FakeServer({"message": "success", "transaction_id": case["input"]})
+    payment = run(
+        make(mode, WavePay, AsyncWavePay, WavePayConfig.from_env(CONFIG_ENV), wave).initiate(
+            wave_pay_data(WAVE_LIMITS["data"])
+        )
+    )
+    assert payment.url.endswith("/authenticate?transaction_id=" + case["escaped"])
+
+
+ASCII_TRIM = VECTORS["ascii_trim"]
+
+
+@pytest.mark.parametrize("case", ASCII_TRIM["env"], ids=lambda case: repr(case["value"]))
+def test_ascii_trim_env(case: dict[str, Any]) -> None:
+    env = env_with({"KBZ_PAY_APP_ID": case["value"]})
+    if case["app_id"] is None:
+        with pytest.raises(ConfigurationError) as info:
+            KbzPayConfig.from_env(env)
+        assert str(info.value) == case["message"]
+    else:
+        assert KbzPayConfig.from_env(env).app_id == case["app_id"]
+
+
+@pytest.mark.parametrize(
+    "case", ASCII_TRIM["kbz_pay_order_id"], ids=lambda case: repr(case["order_id"])
+)
+def test_ascii_trim_kbz_pay_order_id(case: dict[str, Any]) -> None:
+    data = KbzPayPaymentData(
+        order_id=case["order_id"], amount=1000, callback_url="https://shop.test/cb"
+    )
+    assert found(KbzPay.validate, data) == snake_errors(case["errors"])
+
+
+SETTING_TYPES = VECTORS["config_setting_types"]
+
+
+@pytest.mark.parametrize("case", SETTING_TYPES["cases"], ids=lambda case: repr(case["value"]))
+def test_config_setting_types(case: dict[str, Any]) -> None:
+    config = {**SETTING_TYPES["config"], SETTING_TYPES["key"]: case["value"]}
+    if case["result"] is None:
+        with pytest.raises(ConfigurationError) as info:
+            CyberSource(config)
+        assert str(info.value) == SETTING_TYPES["message"]
+    else:
+        assert CyberSource(config).config.profile_id == case["result"]
+
+
+@pytest.mark.parametrize(
+    "case",
+    VECTORS["config_integer_limits"]["cases"],
+    ids=lambda case: f"{case['variable']}={case['value']}",
+)
+def test_config_integer_limits(case: dict[str, Any]) -> None:
+    env = env_with({case["variable"]: case["value"]})
+    if "seconds" in case:
+        config = CONFIGS[case["gateway"]].from_env(env)
+        seconds = (
+            config.time_to_live_seconds
+            if case["variable"] == "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS"
+            else config.timeout_seconds
+        )
+        assert seconds == case["seconds"]
+        return
+    with pytest.raises(ConfigurationError) as info:
+        CONFIGS[case["gateway"]].from_env(env)
+    assert (info.value.gateway, info.value.key, str(info.value)) == (
+        case["gateway"],
+        case["key"],
+        case["message"],
+    )
+
+
+@pytest.mark.parametrize(
+    "case",
+    VECTORS["config_validation_order"]["cases"],
+    ids=lambda case: f"{case['gateway']}: {case['key']}",
+)
+def test_config_validation_order(case: dict[str, Any]) -> None:
+    with pytest.raises(ConfigurationError) as info:
+        CONFIGS[case["gateway"]].from_env(env_with(case["env"]))
+    assert (info.value.key, str(info.value)) == (case["key"], case["message"])
+
+
+def wave_amount(amount: int | str | None) -> Any:
+    return Amount.parse(amount) if isinstance(amount, str) else amount
+
+
+def wave_vector_data(data: dict[str, Any]) -> WavePayPaymentData:
+    """A Wave Pay payment from a vector's snake_case data; string amounts are parsed."""
+    return WavePayPaymentData(
+        order_id=data["order_id"],
+        callback_url=data["callback_url"],
+        return_url=data["return_url"],
+        description=data["description"],
+        items=[WavePayItem(name, wave_amount(amount)) for name, amount in data["items"]],
+        amount=wave_amount(data.get("amount")),
+        merchant_reference_id=data["merchant_reference_id"],
+        merchant_name=data.get("merchant_name"),
+        time_to_live_seconds=data.get("time_to_live_in_seconds"),
+        additional_field_3=data.get("additional_field_3"),
+        additional_field_4=data.get("additional_field_4"),
+        additional_field_5=data.get("additional_field_5"),
+    )
+
+
+def negative_amount_data(gateway: str, data: dict[str, Any]) -> tuple[Any, Any]:
+    if gateway == "kbz_pay":
+        return KbzPay.validate, KbzPayPaymentData(**data)
+    if gateway == "wave_pay":
+        return WavePay.validate, wave_vector_data(data)
+    if gateway == "aya_pay":
+        return AyaPay.validate, AyaPayPaymentData(
+            **{**data, "method": AyaPayMethod(data["method"])}
+        )
+    if gateway == "yoma_mmqr":
+        return YomaMmqr.validate, YomaMmqrPaymentData(**data)
+    return CyberSource.validate, CyberSourcePaymentData(**data)
+
+
+@pytest.mark.parametrize(
+    "case", VECTORS["negative_amounts"]["cases"], ids=lambda case: case["gateway"]
+)
+def test_negative_amounts(case: dict[str, Any]) -> None:
+    validate, data = negative_amount_data(case["gateway"], case["data"])
+    assert found(validate, data) == snake_errors(case["errors"])
+
+
+WAVE_VALIDATION = VECTORS["wave_pay_validation"]
+
+
+@pytest.mark.parametrize("case", WAVE_VALIDATION["cases"], ids=lambda case: case["name"])
+def test_wave_pay_validation(case: dict[str, Any]) -> None:
+    data = wave_vector_data({**WAVE_VALIDATION["data"], **case["data"]})
+    assert found(WavePay.validate, data) == snake_errors(case["errors"])
+
+
+WAVE_EXACT = VECTORS["wave_pay_exact_amount"]
+
+
+def test_wave_pay_exact_amount(mode: str) -> None:
+    config = dict(WAVE_EXACT["config"])
+    config["time_to_live_seconds"] = config.pop("time_to_live_in_seconds")
+    server = FakeServer({"message": "success", "transaction_id": "T1"})
+    run(
+        make(mode, WavePay, AsyncWavePay, WavePayConfig(**config), server).initiate(
+            wave_vector_data(WAVE_EXACT["data"])
+        )
+    )
+    body = server.last().body
+    expected = WAVE_EXACT["expected"]
+    assert f'"amount":{expected["amount_json"]},' in body
+    assert server.last().json()["items"] == expected["items"]
+    assert server.last().json()["hash"] == expected["hash"]
+
+
+@pytest.mark.parametrize(
+    "case", VECTORS["wave_pay_errors"]["cases"], ids=lambda case: f"{case['status']} {case['body']}"
+)
+def test_wave_pay_errors(mode: str, case: dict[str, Any]) -> None:
+    config = dict(WAVE_REQUEST["config"])
+    config["time_to_live_seconds"] = config.pop("time_to_live_in_seconds")
+    server = FakeServer((case["status"], case["body"]))
+    gateway = make(mode, WavePay, AsyncWavePay, WavePayConfig(**config), server)
+    with pytest.raises(ApiError) as info:
+        run(gateway.initiate(wave_pay_data(WAVE_LIMITS["data"])))
+    assert_api_error(
+        info,
+        {
+            "message": f"Wave Pay payment request failed with HTTP {case['status']}: "
+            f"{case['gateway_message']}",
+            "gateway_code": case["gateway_code"],
+            "gateway_message": case["gateway_message"],
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "case", VECTORS["aya_pay_services"]["cases"], ids=lambda case: case["name"]
+)
+def test_aya_pay_services(mode: str, case: dict[str, Any]) -> None:
+    server = FakeServer((case.get("status", 200), case["body"]))
+    gateway = make(mode, AyaPay, AsyncAyaPay, AyaPayConfig.from_env(CONFIG_ENV), server)
+    if "error" in case:
+        with pytest.raises(ApiError) as info:
+            run(gateway.services())
+        assert_api_error(info, case["error"])
+        return
+    services = run(gateway.services())
+    assert [
+        {
+            "name": service.name,
+            "key": service.key,
+            "image_url": service.image_url,
+            "methods": [str(method) for method in service.methods],
+            "unknown_methods": list(service.unknown_methods),
+        }
+        for service in services
+    ] == case["services"]
+
+
+@pytest.mark.parametrize(
+    "case", VECTORS["yoma_mmqr_responses"]["cases"], ids=lambda case: case["name"]
+)
+def test_yoma_mmqr_responses(mode: str, case: dict[str, Any]) -> None:
+    server = FakeServer(*[(reply["status"], reply["body"]) for reply in case["responses"]])
+    gateway = make(mode, YomaMmqr, AsyncYomaMmqr, YomaMmqrConfig.from_env(CONFIG_ENV), server)
+    call = gateway.status if case["call"] == "status" else gateway.renew_qr
+    if "error" in case:
+        with pytest.raises(ApiError) as info:
+            run(call(case["argument"]))
+        assert_api_error(info, case["error"])
+        return
+    result = run(call(case["argument"]))
+    if case["call"] == "status":
+        actual = {
+            "status": str(result.status),
+            "gateway_status": result.gateway_status,
+            "gateway_reference": result.gateway_reference,
+        }
+    else:
+        actual = {"qr_image": result.qr_image, "reference": result.reference}
+    assert actual == case["result"]
+
+
+@pytest.mark.parametrize(
+    "case", VECTORS["kbz_pay_responses"]["cases"], ids=lambda case: case["name"]
+)
+def test_kbz_pay_responses(mode: str, case: dict[str, Any]) -> None:
+    server = FakeServer((200, case["body"]))
+    gateway = make(mode, KbzPay, AsyncKbzPay, KbzPayConfig.from_env(CONFIG_ENV), server)
+    data = KbzPayPaymentData(order_id="ORDER_1", amount=1000, callback_url="https://shop.test/cb")
+
+    def call() -> Any:
+        return run(gateway.status("ORDER_1") if case["call"] == "status" else gateway.qr(data))
+
+    if "error" in case:
+        with pytest.raises(ApiError) as info:
+            call()
+        assert_api_error(info, case["error"])
+        return
+    result = call()
+    if case["call"] == "status":
+        actual = {
+            "order_id": result.order_id,
+            "status": str(result.status),
+            "gateway_status": result.gateway_status,
+            "gateway_reference": result.gateway_reference,
+            "amount": result.amount,
+        }
+    else:
+        actual = {"qr_string": result.qr_string, "reference": result.reference}
+    assert actual == case["result"]

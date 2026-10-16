@@ -147,12 +147,8 @@ class TestCyberSource:
             {},
             {**result(), "auth_amount": "1"},
             {**result(), "signature": "x"},
-            result(signed_field_names="req_reference_number,signed_field_names"),
-            result(signed_field_names="decision,signed_field_names"),
             {"signed_field_names": "decision,missing", "decision": "ACCEPT", "signature": "x"},
             {"signed_field_names": ",", "signature": "x"},
-            result(decision="OTHER"),
-            result(decision=""),
             result(signed_field_names="decision,req_reference_number,req_amount"),
             result(signed_field_names="decision,req_reference_number,,signed_field_names"),
             result(signed_field_names="decision,decision,req_reference_number,signed_field_names"),
@@ -165,6 +161,21 @@ class TestCyberSource:
     )
     def test_rejects_unsigned_or_tampered_results(self, fields: dict[str, str]) -> None:
         with pytest.raises(SignatureVerificationError, match="CyberSource callback signature"):
+            gateway.handle_callback(CallbackRequest(body=urlencode(fields)))
+
+    @pytest.mark.parametrize(
+        "fields",
+        [
+            result(signed_field_names="req_reference_number,signed_field_names"),
+            result(signed_field_names="decision,signed_field_names"),
+            result(decision="OTHER"),
+            result(decision=""),
+        ],
+    )
+    def test_rejects_signed_results_without_a_known_signed_decision_and_reference(
+        self, fields: dict[str, str]
+    ) -> None:
+        with pytest.raises(SignatureVerificationError, match="CyberSource callback is malformed"):
             gateway.handle_callback(CallbackRequest(body=urlencode(fields)))
 
     def test_rejects_a_signed_value_re_partitioned_into_an_accept(self) -> None:

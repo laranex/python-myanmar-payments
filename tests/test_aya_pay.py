@@ -321,7 +321,9 @@ class TestAyaPay:
         )
         values = {"payload": encode(forged), "checkSum": genuine["checkSum"]}
         assert signed(forged)["checkSum"] == genuine["checkSum"]
-        with pytest.raises(SignatureVerificationError, match="AYA Pay callback checksum"):
+        with pytest.raises(
+            SignatureVerificationError, match="AYA Pay callback payload is malformed"
+        ):
             gateway("sync").handle_callback(CallbackRequest.from_json(values))
 
     @pytest.mark.parametrize(
@@ -355,9 +357,13 @@ class TestAyaPay:
         self, mode: str, changes: dict[str, Any]
     ) -> None:
         values = signed(result(**changes))
-        with pytest.raises(SignatureVerificationError, match="AYA Pay callback checksum"):
+        with pytest.raises(
+            SignatureVerificationError, match="AYA Pay callback payload is malformed"
+        ):
             gateway(mode).handle_callback(CallbackRequest.from_json(values))
-        with pytest.raises(SignatureVerificationError, match="AYA Pay redirect checksum"):
+        with pytest.raises(
+            SignatureVerificationError, match="AYA Pay redirect payload is malformed"
+        ):
             gateway(mode).verify_redirect(CallbackRequest(query=urlencode(values)))
 
     def test_accepts_a_payload_without_a_date_time_and_the_currency_code_spelling(self) -> None:

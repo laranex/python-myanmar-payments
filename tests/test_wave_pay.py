@@ -109,6 +109,12 @@ class TestWavePay:
             "merchant_name": "The merchant_name field is required.",
             "time_to_live_seconds": "The time_to_live_seconds field must be greater than 0.",
         }
+        for ttl in (1.5, "300", True):
+            with pytest.raises(InvalidPaymentDataError) as info:
+                WavePay.validate(data(time_to_live_seconds=ttl))
+            assert dict(info.value.errors) == {
+                "time_to_live_seconds": "The time_to_live_seconds field must be an integer."
+            }
 
     def test_sends_only_the_additional_fields_that_are_set(self, mode: str) -> None:
         server = FakeServer(SUCCESS)
@@ -355,7 +361,7 @@ class TestWavePay:
             "null" if payload.get(name) is None else str(payload[name]) for name in names
         )
         payload["hashValue"] = hmac_hex(text, "test-secret")
-        with pytest.raises(SignatureVerificationError, match="Wave Pay callback hash"):
+        with pytest.raises(SignatureVerificationError, match="Wave Pay callback is malformed"):
             gateway(mode).handle_callback(CallbackRequest.from_json(payload))
 
     def test_accepts_dashes_and_underscores_in_the_ids(self) -> None:
