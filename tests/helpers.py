@@ -119,7 +119,7 @@ _GATEWAY_CONFIGS: dict[str, dict[str, Any]] = {
         "pwa_url": "https://wap.kbzpay.com/pgw/pwa/#/",
         "time_to_live_minutes": 15,
     },
-    "wave_money": {
+    "wave_pay": {
         "merchant_id": "testmerchantID",
         "secret_key": "test-secret",
         "merchant_name": "Shop",

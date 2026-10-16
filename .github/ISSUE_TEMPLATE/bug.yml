@@ -33,7 +33,7 @@ body:
       description: Which gateway is affected?
       options:
         - KBZ Pay
-        - Wave Money
+        - Wave Pay
         - AYA Payment Gateway
         - Yoma MMQR
         - CyberSource

@@ -1,7 +1,7 @@
 ---
 name: python-myanmar-payments
 description: >
-  Integrate Myanmar payment gateways (KBZ Pay, Wave Money, AYA Pay, Yoma MMQR, CyberSource) in a Python app (Django, Flask, FastAPI or plain Python) with python-myanmar-payments.
+  Integrate Myanmar payment gateways (KBZ Pay, Wave Pay, AYA Pay, Yoma MMQR, CyberSource) in a Python app (Django, Flask, FastAPI or plain Python) with python-myanmar-payments.
 license: MIT
 metadata:
   author: Nay Thu Khant
@@ -11,7 +11,7 @@ metadata:
 
 ## When to use
 
-Use this skill when a Python app takes payments through KBZ Pay, Wave Money, AYA Payment Gateway, Yoma MMQR or CyberSource. Start payments and verify callbacks with the package's typed API; never build gateway signatures by hand. It works the same in Django, Flask, FastAPI or plain Python.
+Use this skill when a Python app takes payments through KBZ Pay, Wave Pay, AYA Payment Gateway, Yoma MMQR or CyberSource. Start payments and verify callbacks with the package's typed API; never build gateway signatures by hand. It works the same in Django, Flask, FastAPI or plain Python.
 
 ## Install
 
@@ -19,17 +19,17 @@ Use this skill when a Python app takes payments through KBZ Pay, Wave Money, AYA
 pip install python-myanmar-payments
 ```
 
-Requires Python 3.10+ and depends only on `httpx`. Import everything from `python_myanmar_payments`. Every gateway that calls an API has a sync class (`KbzPay`, `WaveMoney`, `AyaPay`, `YomaMmqr`) and an async twin (`AsyncKbzPay`, `AsyncWaveMoney`, `AsyncAyaPay`, `AsyncYomaMmqr`) with the same methods, awaited; use the async ones inside an event loop. `CyberSource` makes no network calls and serves both.
+Requires Python 3.10+ and depends only on `httpx`. Import everything from `python_myanmar_payments`. Every gateway that calls an API has a sync class (`KbzPay`, `WavePay`, `AyaPay`, `YomaMmqr`) and an async twin (`AsyncKbzPay`, `AsyncWavePay`, `AsyncAyaPay`, `AsyncYomaMmqr`) with the same methods, awaited; use the async ones inside an event loop. `CyberSource` makes no network calls and serves both.
 
 ## Configure
 
-`MyanmarPayments.from_env()` reads `KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*`, `YOMA_MMQR_*` and `CYBER_SOURCE_*` plus `MYANMAR_PAYMENTS_HTTP_TIMEOUT` from `os.environ` (the same variables as the PHP, Go and Node SDKs). Every setting of a gateway you use is required and has no default, except the HTTP timeout in seconds (`MYANMAR_PAYMENTS_HTTP_TIMEOUT`, for every gateway except CyberSource), which defaults to 30 (`DEFAULT_TIMEOUT_SECONDS`). That includes the URLs (production's or the gateway's UAT ones, with matching credentials; the config classes' `PRODUCTION_*` constants name production's), the time to live (`KBZ_PAY_TIME_TO_LIVE_IN_MINUTES`, 1 to 120; `WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS`, greater than 0; a payment's `time_to_live_minutes` / `time_to_live_seconds` overrides them), `YOMA_MMQR_WEBHOOK_SECRET` (every Yoma callback must carry it in `X-Webhook-Secret`), `WAVE_MONEY_MERCHANT_NAME` and `YOMA_MMQR_API_VERSION` (e.g. `v1rc`).
+`MyanmarPayments.from_env()` reads `KBZ_PAY_*`, `WAVE_PAY_*`, `AYA_PAY_*`, `YOMA_MMQR_*` and `CYBER_SOURCE_*` plus `MYANMAR_PAYMENTS_HTTP_TIMEOUT` from `os.environ` (the same variables as the PHP, Go and Node SDKs). Every setting of a gateway you use is required and has no default, except the HTTP timeout in seconds (`MYANMAR_PAYMENTS_HTTP_TIMEOUT`, for every gateway except CyberSource), which defaults to 30 (`DEFAULT_TIMEOUT_SECONDS`). That includes the URLs (production's or the gateway's UAT ones, with matching credentials; the config classes' `PRODUCTION_*` constants name production's), the time to live (`KBZ_PAY_TIME_TO_LIVE_IN_MINUTES`, 1 to 120; `WAVE_PAY_TIME_TO_LIVE_IN_SECONDS`, greater than 0; a payment's `time_to_live_minutes` / `time_to_live_seconds` overrides them), `YOMA_MMQR_WEBHOOK_SECRET` (every Yoma callback must carry it in `X-Webhook-Secret`), `WAVE_PAY_MERCHANT_NAME` and `YOMA_MMQR_API_VERSION` (e.g. `v1rc`).
 
 ```python
 from python_myanmar_payments import MyanmarPayments
 
 payments = MyanmarPayments.from_env()  # create once, share across requests
-kbz = payments.kbz_pay()  # also wave_money(), aya_pay(), yoma_mmqr(), cyber_source()
+kbz = payments.kbz_pay()  # also wave_pay(), aya_pay(), yoma_mmqr(), cyber_source()
 ```
 
 - Or build one gateway: `KbzPay(KbzPayConfig(app_id=..., app_key=..., merchant_code=..., api_url=KbzPayConfig.PRODUCTION_API_URL, pwa_url=KbzPayConfig.PRODUCTION_PWA_URL, time_to_live_minutes=15))` (add `timeout_seconds=` to change the 30-second default), `KbzPay.from_env()` or `KbzPay(KbzPayConfig.from_env())`; in async code use `AsyncMyanmarPayments.from_env()` and `AsyncKbzPay`.
@@ -45,7 +45,7 @@ Amounts are `Amount.kyat(1000)`, `Amount.parse("1000.50")`, a whole `int`, decim
 
 ### Start a payment
 
-Each gateway takes a data object (`KbzPayPaymentData`, `WaveMoneyPaymentData` with `WaveMoneyItem`s, `AyaPayPaymentData` with an `AyaPayMethod`, `YomaMmqrPaymentData`, `CyberSourcePaymentData` with a `CyberSourceTransactionType`) and returns a typed result. `CyberSourcePaymentData`'s `currency`, `locale` and `transaction_type` have no defaults: set `currency` (e.g. `"MMK"`), `locale` (e.g. `"en-us"`) and `transaction_type` (e.g. `CyberSourceTransactionType.SALE`).
+Each gateway takes a data object (`KbzPayPaymentData`, `WavePayPaymentData` with `WavePayItem`s, `AyaPayPaymentData` with an `AyaPayMethod`, `YomaMmqrPaymentData`, `CyberSourcePaymentData` with a `CyberSourceTransactionType`) and returns a typed result. `CyberSourcePaymentData`'s `currency`, `locale` and `transaction_type` have no defaults: set `currency` (e.g. `"MMK"`), `locale` (e.g. `"en-us"`) and `transaction_type` (e.g. `CyberSourceTransactionType.SALE`).
 
 ```python
 from python_myanmar_payments import Amount, KbzPayPaymentData
@@ -60,7 +60,7 @@ payment = kbz.pwa(
 return redirect(payment.url)
 ```
 
-- `RedirectPayment` (`url`) from `kbz.pwa(data)` and `wave.initiate(data)`. Wave fills `data.merchant_reference_id` when empty; store it. `WaveMoneyPaymentData` also takes optional `merchant_name` and `time_to_live_seconds` (an `int` greater than 0) to override the configured values for one payment.
+- `RedirectPayment` (`url`) from `kbz.pwa(data)` and `wave.initiate(data)`. Wave fills `data.merchant_reference_id` when empty; store it. Wave's `order_id` and `merchant_reference_id` may only hold letters, numbers, `_` and `-` (at most 100 characters); `callback_url`, `return_url` and `description` take at most 255. `WavePayPaymentData` also takes optional `merchant_name` and `time_to_live_seconds` (an `int` greater than 0) to override the configured values for one payment, and `additional_field_3` to `additional_field_5` (at most 50 characters each) for extra information Wave echoes in the callback.
 - `FormPayment` from `aya.initiate(data)` and `cyber_source.initiate(data)` (no network call, never awaited): return `payment.to_html()` as an auto-submitting page (`payment.to_html(nonce)` adds your Content Security Policy nonce to its inline script), or render `action`, `fields` and `enctype` yourself.
 - `QrPayment` from `kbz.qr(data)` (encode `qr_string`) and `yoma.initiate(data)` (`qr_image_data_uri()`, `expires_at`, `reference`). A Yoma QR lives `YomaMmqr.QR_LIFETIME_SECONDS` (120); renew it with `yoma.renew_qr(order_id)`.
 - `AppPayment` from `kbz.app(data)`: send `payment.to_dict()` (`orderId`, `orderInfo`, `sign`, `signType`) to your mobile app.
@@ -96,7 +96,7 @@ return HttpResponse(ack.body, status=ack.status, headers=ack.headers)
 
 ### Check status and handle errors
 
-- `kbz.status(order_id)`, `aya.status(order_id)` and `yoma.status(reference)` return `PaymentStatusResult` with `status` and `is_successful()`. Wave Money and CyberSource have no status API.
+- `kbz.status(order_id)`, `aya.status(order_id)` and `yoma.status(reference)` return `PaymentStatusResult` with `status` and `is_successful()`. Wave Pay and CyberSource have no status API.
 - Statuses: `PaymentStatus.SUCCESSFUL`, `PENDING`, `FAILED`, `CANCELED`, `EXPIRED`, `UNKNOWN`; `status.is_final()`.
 - Gateway failures raise `ApiError` (`gateway_code`, `gateway_message`, `http_status`, `raw`; network errors are chained as `__cause__`). All errors extend `PaymentError`.
 

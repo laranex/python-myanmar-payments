@@ -10,7 +10,7 @@ import pytest
 from python_myanmar_payments import (
     Amount,
     AsyncKbzPay,
-    AsyncWaveMoney,
+    AsyncWavePay,
     AyaPay,
     AyaPayConfig,
     AyaPayMethod,
@@ -28,10 +28,10 @@ from python_myanmar_payments import (
     MemoryTokenCache,
     PaymentCallback,
     SignatureVerificationError,
-    WaveMoney,
-    WaveMoneyConfig,
-    WaveMoneyItem,
-    WaveMoneyPaymentData,
+    WavePay,
+    WavePayConfig,
+    WavePayItem,
+    WavePayPaymentData,
     YomaMmqr,
     YomaMmqrConfig,
 )
@@ -42,15 +42,18 @@ SECRETS: dict[str, str] = VECTORS["secrets"]
 
 
 def snake(name: str) -> str:
-    """Python names fields in snake_case: ``timeToLiveMinutes`` is ``time_to_live_minutes``."""
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+    """Python names fields in snake_case: ``timeToLiveMinutes`` is ``time_to_live_minutes``.
+
+    A trailing number gets its own part too: ``additionalField3`` is ``additional_field_3``.
+    """
+    return re.sub(r"(?<!^)(?=[A-Z])|(?<=[a-z])(?=[0-9])", "_", name).lower()
 
 
 CONFIG = VECTORS["config"]
 CONFIG_ENV: dict[str, str] = CONFIG["env"]
 CONFIGS: dict[str, Any] = {
     "kbz_pay": KbzPayConfig,
-    "wave_money": WaveMoneyConfig,
+    "wave_pay": WavePayConfig,
     "aya_pay": AyaPayConfig,
     "yoma_mmqr": YomaMmqrConfig,
     "cyber_source": CyberSourceConfig,
@@ -60,7 +63,7 @@ CONFIGS: dict[str, Any] = {
 def gateways() -> dict[str, Any]:
     return {
         "kbz_pay": KbzPay.from_env(CONFIG_ENV),
-        "wave_money": WaveMoney.from_env(CONFIG_ENV),
+        "wave_pay": WavePay.from_env(CONFIG_ENV),
         "aya_pay": AyaPay.from_env(CONFIG_ENV),
         "yoma_mmqr": YomaMmqr.from_env(CONFIG_ENV),
         "cyber_source": CyberSource.from_env(CONFIG_ENV),
@@ -119,7 +122,7 @@ def urls(config: Any) -> dict[str, str]:
     names: tuple[str, ...] = ("base_url",)
     if isinstance(config, KbzPayConfig):
         names = ("api_url", "pwa_url")
-    elif isinstance(config, WaveMoneyConfig):
+    elif isinstance(config, WavePayConfig):
         names = ("base_url", "base_redirect_url")
     return {name: getattr(config, name) for name in names}
 
@@ -130,7 +133,7 @@ def test_config_reads_the_production_urls(gateway: str) -> None:
     assert urls(config) == CONFIG["urls"][gateway]
     if gateway != "cyber_source":
         assert config.timeout_seconds == CONFIG["seconds"]["timeout_in_seconds"]
-    if gateway == "wave_money":
+    if gateway == "wave_pay":
         assert config.time_to_live_seconds == CONFIG["seconds"]["time_to_live_in_seconds"]
 
 
@@ -164,7 +167,7 @@ DEFAULT_TIMEOUT = CONFIG["default_timeout"]
 
 
 @pytest.mark.parametrize("value", DEFAULT_TIMEOUT["values"], ids=repr)
-@pytest.mark.parametrize("gateway", ["kbz_pay", "wave_money", "aya_pay", "yoma_mmqr"])
+@pytest.mark.parametrize("gateway", ["kbz_pay", "wave_pay", "aya_pay", "yoma_mmqr"])
 def test_config_default_timeout(gateway: str, value: str | None) -> None:
     env = dict(CONFIG_ENV)
     if value is None:
@@ -235,15 +238,15 @@ def errors_of(validate: Any, data: Any) -> dict[str, str]:
 
 
 def test_amount_and_timeout_messages() -> None:
-    wave = WaveMoneyPaymentData(
+    wave = WavePayPaymentData(
         order_id="ORDER_1",
         callback_url="https://shop.test/cb",
         return_url="https://shop.test/done",
         description="Order",
-        items=[WaveMoneyItem("Tea", 1000)],
+        items=[WavePayItem("Tea", 1000)],
         amount=Amount.parse("1000.50"),
     )
-    assert errors_of(WaveMoney.validate, wave)["amount"] == MESSAGES["whole_amounts_only"]
+    assert errors_of(WavePay.validate, wave)["amount"] == MESSAGES["whole_amounts_only"]
 
     aya = AyaPayPaymentData(
         order_id="ORDER_1",
@@ -270,21 +273,21 @@ def test_amount_and_timeout_messages() -> None:
     assert errors_of(KbzPay.validate, kbz)["time_to_live_minutes"] == message
 
 
-OVERRIDES = VECTORS["wave_money_request_overrides"]
+OVERRIDES = VECTORS["wave_pay_request_overrides"]
 OVERRIDE_FIELDS = {
     "merchant_name": "merchant_name",
     "time_to_live_in_seconds": "time_to_live_seconds",
 }
 
 
-def wave_override_data(case: dict[str, Any]) -> WaveMoneyPaymentData:
+def wave_override_data(case: dict[str, Any]) -> WavePayPaymentData:
     data = OVERRIDES["data"]
-    return WaveMoneyPaymentData(
+    return WavePayPaymentData(
         order_id=data["order_id"],
         callback_url=data["callback_url"],
         return_url=data["return_url"],
         description=data["description"],
-        items=[WaveMoneyItem(name, amount) for name, amount in data["items"]],
+        items=[WavePayItem(name, amount) for name, amount in data["items"]],
         merchant_reference_id=data["merchant_reference_id"],
         merchant_name=case["merchant_name"],
         time_to_live_seconds=case["time_to_live_in_seconds"],
@@ -292,17 +295,17 @@ def wave_override_data(case: dict[str, Any]) -> WaveMoneyPaymentData:
 
 
 @pytest.mark.parametrize("case", OVERRIDES["cases"], ids=lambda case: repr(case["merchant_name"]))
-def test_wave_money_request_overrides(mode: str, case: dict[str, Any]) -> None:
+def test_wave_pay_request_overrides(mode: str, case: dict[str, Any]) -> None:
     config = OVERRIDES["config"]
     server = FakeServer({"message": "success", "transaction_id": "T1"})
     run(
         make(
             mode,
-            WaveMoney,
-            AsyncWaveMoney,
-            WaveMoneyConfig(
+            WavePay,
+            AsyncWavePay,
+            WavePayConfig(
                 **gateway_config(
-                    "wave_money",
+                    "wave_pay",
                     merchant_id=config["merchant_id"],
                     secret_key=config["secret_key"],
                     merchant_name=config["merchant_name"],
@@ -312,7 +315,7 @@ def test_wave_money_request_overrides(mode: str, case: dict[str, Any]) -> None:
             server,
         ).initiate(wave_override_data(case))
     )
-    sent = server.last().form()
+    sent = server.last().json()
     assert {name: sent[name] for name in case["expected"]} == case["expected"]
 
 
@@ -321,9 +324,80 @@ def test_wave_money_request_overrides(mode: str, case: dict[str, Any]) -> None:
     OVERRIDES["invalid"],
     ids=lambda case: f"{case['setting']}: {case[case['setting']]!r}",
 )
-def test_wave_money_invalid_overrides(case: dict[str, Any]) -> None:
-    errors = errors_of(WaveMoney.validate, wave_override_data(case))
+def test_wave_pay_invalid_overrides(case: dict[str, Any]) -> None:
+    errors = errors_of(WavePay.validate, wave_override_data(case))
     assert list(errors) == [OVERRIDE_FIELDS[case["setting"]]]
+
+
+WAVE_REQUEST = VECTORS["wave_pay_request"]
+
+
+def wave_pay_data(data: dict[str, Any], **changes: Any) -> WavePayPaymentData:
+    return WavePayPaymentData(
+        **{
+            "order_id": data["order_id"],
+            "callback_url": data["callback_url"],
+            "return_url": data["return_url"],
+            "description": data["description"],
+            "items": [WavePayItem(name, amount) for name, amount in data["items"]],
+            "merchant_reference_id": data["merchant_reference_id"],
+            "additional_field_3": data.get("additional_field_3"),
+            "additional_field_4": data.get("additional_field_4"),
+            "additional_field_5": data.get("additional_field_5"),
+            **changes,
+        }
+    )
+
+
+@pytest.mark.parametrize("case", WAVE_REQUEST["cases"], ids=lambda case: case["name"])
+def test_wave_pay_request(mode: str, case: dict[str, Any]) -> None:
+    expected = WAVE_REQUEST["expected"]
+    response = WAVE_REQUEST["response"]
+    config = WAVE_REQUEST["config"]
+    server = FakeServer((response["status"], response["body"]))
+    payment = run(
+        make(
+            mode,
+            WavePay,
+            AsyncWavePay,
+            WavePayConfig(
+                merchant_id=config["merchant_id"],
+                secret_key=config["secret_key"],
+                merchant_name=config["merchant_name"],
+                base_url=config["base_url"],
+                base_redirect_url=config["base_redirect_url"],
+                time_to_live_seconds=config["time_to_live_in_seconds"],
+            ),
+            server,
+        ).initiate(wave_pay_data(case["data"]))
+    )
+    sent = server.last()
+    assert sent.method == expected["method"]
+    assert sent.url == expected["url"]
+    assert {name: sent.headers[name.lower()] for name in expected["headers"]} == expected["headers"]
+    assert sent.json() == case["expected_body"]
+    assert list(sent.json()) == list(case["expected_body"])
+    assert payment.url == expected["redirect_url"]
+    assert payment.gateway_reference == expected["gateway_reference"]
+
+
+WAVE_LIMITS = VECTORS["wave_pay_limits"]
+
+
+@pytest.mark.parametrize("case", WAVE_LIMITS["valid"], ids=lambda case: case["field"])
+def test_wave_pay_limits_valid(case: dict[str, Any]) -> None:
+    data = wave_pay_data(WAVE_LIMITS["data"], **{snake(case["field"]): case["value"]})
+    WavePay.validate(data)
+    assert getattr(data, snake(case["field"])) == case["value"]
+
+
+@pytest.mark.parametrize("case", WAVE_LIMITS["invalid"], ids=lambda case: case["field"])
+def test_wave_pay_limits_invalid(case: dict[str, Any]) -> None:
+    field = snake(case["field"])
+    errors = errors_of(
+        WavePay.validate, wave_pay_data(WAVE_LIMITS["data"], **{field: case["value"]})
+    )
+    assert errors == {field: case["error"].replace(case["field"], field)}
 
 
 KBZ_TIME_TO_LIVE = VECTORS["kbz_pay_time_to_live"]

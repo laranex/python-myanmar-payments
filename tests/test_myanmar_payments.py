@@ -12,7 +12,7 @@ from python_myanmar_payments import (
     AsyncAyaPay,
     AsyncKbzPay,
     AsyncMyanmarPayments,
-    AsyncWaveMoney,
+    AsyncWavePay,
     AsyncYomaMmqr,
     AyaPay,
     AyaPayConfig,
@@ -23,8 +23,8 @@ from python_myanmar_payments import (
     KbzPayConfig,
     MemoryTokenCache,
     MyanmarPayments,
-    WaveMoney,
-    WaveMoneyConfig,
+    WavePay,
+    WavePayConfig,
     YomaMmqr,
     YomaMmqrConfig,
 )
@@ -37,12 +37,12 @@ ENV = {
     "KBZ_PAY_BASE_URL": "https://api.kbzpay.com/payment/gateway",
     "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://wap.kbzpay.com/pgw/pwa/#/",
     "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES": "15",
-    "WAVE_MONEY_MERCHANT_ID": "w",
-    "WAVE_MONEY_SECRET_KEY": "s",
-    "WAVE_MONEY_MERCHANT_NAME": "Shop",
-    "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS": "300",
-    "WAVE_MONEY_BASE_URL": "https://payments.wavemoney.io",
-    "WAVE_MONEY_BASE_REDIRECT_URL": "https://payments.wavemoney.io",
+    "WAVE_PAY_MERCHANT_ID": "w",
+    "WAVE_PAY_SECRET_KEY": "s",
+    "WAVE_PAY_MERCHANT_NAME": "Shop",
+    "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS": "300",
+    "WAVE_PAY_BASE_URL": "https://payments.wavemoney.io",
+    "WAVE_PAY_BASE_REDIRECT_URL": "https://payments.wavemoney.io",
     "AYA_PAY_APP_KEY": "a",
     "AYA_PAY_APP_SECRET": "s",
     "AYA_PAY_BASE_URL": "https://pgw.ayainnovation.com",
@@ -67,8 +67,8 @@ class TestMyanmarPayments:
             assert isinstance(payments.kbz_pay(), KbzPay)
             assert payments.kbz_pay() is payments.kbz_pay()
             assert payments.kbz_pay().config.app_id == "kp1"
-            assert isinstance(payments.wave_money(), WaveMoney)
-            assert payments.wave_money() is payments.wave_money()
+            assert isinstance(payments.wave_pay(), WavePay)
+            assert payments.wave_pay() is payments.wave_pay()
             assert isinstance(payments.aya_pay(), AyaPay)
             assert payments.aya_pay() is payments.aya_pay()
             assert isinstance(payments.yoma_mmqr(), YomaMmqr)
@@ -94,7 +94,7 @@ class TestMyanmarPayments:
         client = httpx.Client()
         payments = MyanmarPayments(
             kbz_pay=KbzPayConfig(**gateway_config("kbz_pay", app_id="a")),
-            wave_money=WaveMoneyConfig(**gateway_config("wave_money")),
+            wave_pay=WavePayConfig(**gateway_config("wave_pay")),
             aya_pay=AyaPayConfig(**gateway_config("aya_pay")),
             yoma_mmqr=YomaMmqrConfig(**gateway_config("yoma_mmqr")),
             cyber_source=CyberSourceConfig(**gateway_config("cyber_source", profile_id="p")),
@@ -113,8 +113,8 @@ class TestMyanmarPayments:
             kbz_pay=gateway_config(
                 "kbz_pay", app_id="a", timeout_seconds="30", time_to_live_minutes="15"
             ),
-            wave_money=gateway_config(
-                "wave_money", merchant_name="n", time_to_live_seconds="300", timeout_seconds=30
+            wave_pay=gateway_config(
+                "wave_pay", merchant_name="n", time_to_live_seconds="300", timeout_seconds=30
             ),
             aya_pay=gateway_config("aya_pay", app_key="k", timeout_seconds=30),
             yoma_mmqr=gateway_config("yoma_mmqr", webhook_hash_key="h", timeout_seconds=30),
@@ -123,7 +123,7 @@ class TestMyanmarPayments:
         assert payments.kbz_pay().config.app_id == "a"
         assert payments.kbz_pay().config.timeout_seconds == 30
         assert payments.kbz_pay().config.time_to_live_minutes == 15
-        assert payments.wave_money().config.merchant_name == "n"
+        assert payments.wave_pay().config.merchant_name == "n"
         assert payments.aya_pay().config.app_key == "k"
         assert payments.yoma_mmqr().config.webhook_hash_key == "h"
         assert payments.cyber_source().config.profile_id == "p"
@@ -146,7 +146,7 @@ class TestMyanmarPayments:
         ("method", "gateway", "key"),
         [
             ("kbz_pay", "kbz_pay", "app_id"),
-            ("wave_money", "wave_money", "merchant_id"),
+            ("wave_pay", "wave_pay", "merchant_id"),
             ("aya_pay", "aya_pay", "app_key"),
             ("yoma_mmqr", "yoma_mmqr", "merchant_id"),
             ("cyber_source", "cyber_source", "profile_id"),
@@ -165,8 +165,8 @@ class TestAsyncMyanmarPayments:
             async with AsyncMyanmarPayments.from_env(ENV) as payments:
                 assert isinstance(payments.kbz_pay(), AsyncKbzPay)
                 assert payments.kbz_pay() is payments.kbz_pay()
-                assert isinstance(payments.wave_money(), AsyncWaveMoney)
-                assert payments.wave_money() is payments.wave_money()
+                assert isinstance(payments.wave_pay(), AsyncWavePay)
+                assert payments.wave_pay() is payments.wave_pay()
                 assert isinstance(payments.aya_pay(), AsyncAyaPay)
                 assert payments.aya_pay() is payments.aya_pay()
                 assert isinstance(payments.yoma_mmqr(), AsyncYomaMmqr)
@@ -204,7 +204,7 @@ class TestAgentSkill:
         gateways = [
             KbzPay,
             AsyncKbzPay,
-            WaveMoney,
+            WavePay,
             AyaPay,
             YomaMmqr,
             CyberSource,

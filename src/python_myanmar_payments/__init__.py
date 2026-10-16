@@ -1,6 +1,6 @@
 """Python SDK for Myanmar payment gateways.
 
-KBZ Pay, Wave Money, AYA Pay, Yoma MMQR and CyberSource. Typed requests and
+KBZ Pay, Wave Pay, AYA Pay, Yoma MMQR and CyberSource. Typed requests and
 results, exact amounts, sync and async clients.
 """
 
@@ -44,12 +44,12 @@ from .cyber_source import (
     CyberSourceTransactionType,
 )
 from .kbz_pay import AsyncKbzPay, KbzPay, KbzPayConfig, KbzPayPaymentData, KbzPaySigner
-from .wave_money import (
-    AsyncWaveMoney,
-    WaveMoney,
-    WaveMoneyConfig,
-    WaveMoneyItem,
-    WaveMoneyPaymentData,
+from .wave_pay import (
+    AsyncWavePay,
+    WavePay,
+    WavePayConfig,
+    WavePayItem,
+    WavePayPaymentData,
 )
 from .yoma_mmqr import AsyncYomaMmqr, YomaMmqr, YomaMmqrConfig, YomaMmqrPaymentData
 
@@ -64,7 +64,7 @@ __all__ = [
     "AsyncKbzPay",
     "AsyncMyanmarPayments",
     "AsyncTokenCache",
-    "AsyncWaveMoney",
+    "AsyncWavePay",
     "AsyncYomaMmqr",
     "AyaPay",
     "AyaPayConfig",
@@ -99,10 +99,10 @@ __all__ = [
     "RedirectPayment",
     "SignatureVerificationError",
     "TokenCache",
-    "WaveMoney",
-    "WaveMoneyConfig",
-    "WaveMoneyItem",
-    "WaveMoneyPaymentData",
+    "WavePay",
+    "WavePayConfig",
+    "WavePayItem",
+    "WavePayPaymentData",
     "YomaMmqr",
     "YomaMmqrConfig",
     "YomaMmqrPaymentData",

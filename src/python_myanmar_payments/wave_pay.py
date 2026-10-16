@@ -1,4 +1,4 @@
-"""Wave Money (WavePay payment gateway): redirect payments and callbacks."""
+"""Wave Pay (Pay with Wave API v1.3): redirect payments and callbacks."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from ._http import (
     GatewayResponse,
     HttpRequest,
     SyncGateway,
-    form_request,
+    json_request,
 )
 from ._json import LosslessObject, dumps, to_plain_object
 from ._results import PaymentCallback, RedirectPayment
@@ -44,16 +44,16 @@ from ._validate import AmountRule, Validator
 from ._values import get, is_nested, optional, scalar_string, trimmed
 
 __all__ = [
-    "AsyncWaveMoney",
-    "WaveMoney",
-    "WaveMoneyConfig",
-    "WaveMoneyItem",
-    "WaveMoneyPaymentData",
+    "AsyncWavePay",
+    "WavePay",
+    "WavePayConfig",
+    "WavePayItem",
+    "WavePayPaymentData",
 ]
 
 
-class WaveMoneyConfig:
-    """Wave Money credentials and endpoints.
+class WavePayConfig:
+    """Wave Pay (Pay with Wave) credentials and endpoints.
 
     Every setting except the HTTP timeout is required; a missing or blank one
     raises a :class:`~python_myanmar_payments.ConfigurationError`. The timeout
@@ -80,7 +80,7 @@ class WaveMoneyConfig:
     ``/payment``."""
     base_redirect_url: str
     """The host the customer is sent to, e.g. :attr:`PRODUCTION_URL` or
-    ``https://preprodpayments.wavemoney.io``. The customer approves the payment at
+    ``https://preprodpayments.wavemoney.io:8107``. The customer approves the payment at
     its ``/authenticate``."""
 
     def __init__(
@@ -94,44 +94,44 @@ class WaveMoneyConfig:
         base_url: str = "",
         base_redirect_url: str = "",
     ) -> None:
-        self.merchant_id = require_setting("wave_money", "merchant_id", merchant_id)
-        self.secret_key = require_setting("wave_money", "secret_key", secret_key)
-        self.merchant_name = require_setting("wave_money", "merchant_name", merchant_name)
-        self.base_url = trim_url(require_setting("wave_money", "base_url", base_url))
+        self.merchant_id = require_setting("wave_pay", "merchant_id", merchant_id)
+        self.secret_key = require_setting("wave_pay", "secret_key", secret_key)
+        self.merchant_name = require_setting("wave_pay", "merchant_name", merchant_name)
+        self.base_url = trim_url(require_setting("wave_pay", "base_url", base_url))
         self.base_redirect_url = trim_url(
-            require_setting("wave_money", "base_redirect_url", base_redirect_url)
+            require_setting("wave_pay", "base_redirect_url", base_redirect_url)
         )
         self.time_to_live_seconds = require_seconds(
-            "wave_money", "time_to_live_in_seconds", time_to_live_seconds
+            "wave_pay", "time_to_live_in_seconds", time_to_live_seconds
         )
-        self.timeout_seconds = read_timeout("wave_money", timeout_seconds)
+        self.timeout_seconds = read_timeout("wave_pay", timeout_seconds)
 
     @classmethod
-    def from_env(cls, env: EnvSource | None = None) -> WaveMoneyConfig:
-        """Reads the ``WAVE_MONEY_*`` environment variables.
+    def from_env(cls, env: EnvSource | None = None) -> WavePayConfig:
+        """Reads the ``WAVE_PAY_*`` environment variables.
 
-        ``WAVE_MONEY_MERCHANT_ID``, ``WAVE_MONEY_SECRET_KEY``,
-        ``WAVE_MONEY_MERCHANT_NAME``, ``WAVE_MONEY_BASE_URL``,
-        ``WAVE_MONEY_BASE_REDIRECT_URL``, ``WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS`` and
+        ``WAVE_PAY_MERCHANT_ID``, ``WAVE_PAY_SECRET_KEY``,
+        ``WAVE_PAY_MERCHANT_NAME``, ``WAVE_PAY_BASE_URL``,
+        ``WAVE_PAY_BASE_REDIRECT_URL``, ``WAVE_PAY_TIME_TO_LIVE_IN_SECONDS`` and
         ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``. Defaults to ``os.environ``.
         """
         env = default_env() if env is None else env
         return cls(
-            merchant_id=env_first(env, "WAVE_MONEY_MERCHANT_ID"),
-            secret_key=env_first(env, "WAVE_MONEY_SECRET_KEY"),
-            merchant_name=env_first(env, "WAVE_MONEY_MERCHANT_NAME"),
-            time_to_live_seconds=env_first(env, "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS"),
+            merchant_id=env_first(env, "WAVE_PAY_MERCHANT_ID"),
+            secret_key=env_first(env, "WAVE_PAY_SECRET_KEY"),
+            merchant_name=env_first(env, "WAVE_PAY_MERCHANT_NAME"),
+            time_to_live_seconds=env_first(env, "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS"),
             timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
-            base_url=env_first(env, "WAVE_MONEY_BASE_URL"),
-            base_redirect_url=env_first(env, "WAVE_MONEY_BASE_REDIRECT_URL"),
+            base_url=env_first(env, "WAVE_PAY_BASE_URL"),
+            base_redirect_url=env_first(env, "WAVE_PAY_BASE_REDIRECT_URL"),
         )
 
     def __repr__(self) -> str:
-        return f"WaveMoneyConfig(merchant_id={self.merchant_id!r})"
+        return f"WavePayConfig(merchant_id={self.merchant_id!r})"
 
 
 @dataclass(frozen=True)
-class WaveMoneyItem:
+class WavePayItem:
     """A line item shown on Wave's payment page."""
 
     name: str
@@ -141,24 +141,27 @@ class WaveMoneyItem:
 
 
 @dataclass(kw_only=True)
-class WaveMoneyPaymentData:
-    """A Wave Money payment request. Wave only accepts whole kyat (MMK)."""
+class WavePayPaymentData:
+    """A Wave Pay payment request. Wave only accepts whole kyat (MMK)."""
 
     order_id: str
-    """Your order ID. One order can have several payment attempts."""
+    """Your order ID, at most 100 characters: letters, numbers, ``_`` and ``-``.
+    One order can have several payment attempts."""
     callback_url: str
-    """The URL Wave posts the result to (``backend_result_url``)."""
+    """The URL Wave posts the result to (``backend_result_url``), at most 255
+    characters."""
     return_url: str
-    """Where Wave sends the customer back (``frontend_result_url``). Not proof of
-    payment."""
+    """Where Wave sends the customer back (``frontend_result_url``), at most 255
+    characters. Not proof of payment."""
     description: str
-    """Shown to the customer."""
-    items: Sequence[WaveMoneyItem] = field(default_factory=list)
+    """Shown to the customer (``payment_description``), at most 255 characters."""
+    items: Sequence[WavePayItem] = field(default_factory=list)
     """The line items shown on Wave's page; at least one."""
     amount: AmountInput | None = None
     """The total in whole kyat. Leave it unset to charge the sum of the items."""
     merchant_reference_id: str | None = None
-    """The unique ID of this attempt; Wave rejects a reused one.
+    """The unique ID of this attempt, at most 100 characters: letters, numbers,
+    ``_`` and ``-``. Wave rejects a reused one.
 
     ``initiate()`` fills it with a random ID when empty, so store it afterwards:
     Wave's callback may omit ``orderId`` but always carries this."""
@@ -168,13 +171,23 @@ class WaveMoneyPaymentData:
     time_to_live_seconds: int | None = None
     """Seconds the customer has to pay this payment, greater than 0. Overrides the
     configured ``time_to_live_seconds`` for this payment."""
+    additional_field_3: str | None = None
+    """Extra information sent as ``additional_field_3``, at most 50 characters;
+    Wave echoes it as the callback's ``additionalField3``. Not sent when ``None``
+    or empty."""
+    additional_field_4: str | None = None
+    """Extra information sent as ``additional_field_4``, at most 50 characters;
+    echoed as ``additionalField4``. Not sent when ``None`` or empty."""
+    additional_field_5: str | None = None
+    """Extra information sent as ``additional_field_5``, at most 50 characters;
+    echoed as ``additionalField5``. Not sent when ``None`` or empty."""
 
 
 _STATUSES: Mapping[str, PaymentStatus] = {
     "PAYMENT_CONFIRMED": PaymentStatus.SUCCESSFUL,
-    "INSUFFICIENT_BALANCE": PaymentStatus.PENDING,
-    "ACCOUNT_LOCKED": PaymentStatus.FAILED,
     "BILL_COLLECTION_FAILED": PaymentStatus.FAILED,
+    "INSUFFICIENT_BALANCE": PaymentStatus.FAILED,
+    "ACCOUNT_LOCKED": PaymentStatus.FAILED,
     "PAYMENT_REQUEST_CANCELLED": PaymentStatus.CANCELED,
     "TRANSACTION_TIMED_OUT": PaymentStatus.EXPIRED,
     "SCHEDULER_TRANSACTION_TIMED_OUT": PaymentStatus.EXPIRED,
@@ -194,7 +207,9 @@ _CALLBACK_FIELDS = (
     "requestTime",
 )
 
-_RULE = AmountRule("Wave Money", 0)
+_RULE = AmountRule("Wave Pay", 0)
+_CURRENCY = "MMK"
+_ADDITIONAL_FIELDS = ("additional_field_3", "additional_field_4", "additional_field_5")
 
 # Wave's hash concatenates the values with no separator, so a verified callback
 # must also hold values in their expected formats.
@@ -203,17 +218,17 @@ _ID_DESCRIPTION = "letters, numbers, underscores and dashes"
 _AMOUNT = re.compile(r"[0-9]+(?:\.[0-9]+)?")
 
 
-class _WaveMoneyBase:
-    """What the sync and async Wave Money clients share."""
+class _WavePayBase:
+    """What the sync and async Wave Pay clients share."""
 
-    config: WaveMoneyConfig
+    config: WavePayConfig
     """The configuration in use."""
 
-    def __init__(self, config: WaveMoneyConfig | Mapping[str, Any]) -> None:
-        self.config = config_of(WaveMoneyConfig, config)
+    def __init__(self, config: WavePayConfig | Mapping[str, Any]) -> None:
+        self.config = config_of(WavePayConfig, config)
 
     @staticmethod
-    def resolved_amount(data: WaveMoneyPaymentData) -> Amount | None:
+    def resolved_amount(data: WavePayPaymentData) -> Amount | None:
         """The total that will be charged: ``amount``, or the exact sum of the items.
 
         ``None`` when an item amount is missing, malformed or has decimals.
@@ -232,7 +247,7 @@ class _WaveMoneyBase:
         return Amount.kyat(total)
 
     @classmethod
-    def validate(cls, data: WaveMoneyPaymentData) -> None:
+    def validate(cls, data: WavePayPaymentData) -> None:
         """Checks the request against Wave's documented rules.
 
         Raises an :class:`~python_myanmar_payments.InvalidPaymentDataError`.
@@ -241,19 +256,26 @@ class _WaveMoneyBase:
         validator = (
             Validator()
             .required("order_id", data.order_id)
+            .max("order_id", data.order_id, 100)
             .pattern("order_id", data.order_id, _ID, _ID_DESCRIPTION)
             .required("callback_url", data.callback_url)
             .url("callback_url", data.callback_url)
+            .max("callback_url", data.callback_url, 255)
             .required("return_url", data.return_url)
             .url("return_url", data.return_url)
+            .max("return_url", data.return_url, 255)
             .required("description", data.description)
+            .max("description", data.description, 255)
             .when(len(items) == 0, "items", "The items field must have at least one item.")
             .string("merchant_reference_id", data.merchant_reference_id)
+            .max("merchant_reference_id", data.merchant_reference_id, 100)
             .pattern("merchant_reference_id", data.merchant_reference_id, _ID, _ID_DESCRIPTION)
             .positive("time_to_live_seconds", data.time_to_live_seconds)
         )
         if data.merchant_name is not None:
             validator.required("merchant_name", data.merchant_name)
+        for name in _ADDITIONAL_FIELDS:
+            validator.string(name, getattr(data, name)).max(name, getattr(data, name), 50)
         for index, item in enumerate(items):
             validator.required(f"items.{index}.name", getattr(item, "name", None)).amount(
                 f"items.{index}.amount", getattr(item, "amount", None), _RULE
@@ -267,7 +289,8 @@ class _WaveMoneyBase:
         """Verifies Wave's callback. Only ``PAYMENT_CONFIRMED`` means the customer paid.
 
         ``order_id`` falls back to ``merchantReferenceId`` when ``orderId`` is
-        missing, null or empty, because Wave marks ``orderId`` as optional. A
+        missing, null or empty, as a safeguard: earlier Wave documents marked
+        ``orderId`` optional. A
         callback whose amount is not a non-negative decimal, or whose ``orderId`` or
         ``merchantReferenceId`` holds anything but letters, numbers, ``_`` and
         ``-``, fails verification too.
@@ -292,7 +315,7 @@ class _WaveMoneyBase:
             or any(_ID.fullmatch(value) is None for value in (order_id, reference_id) if value)
         ):
             raise SignatureVerificationError(
-                "Wave Money callback hash verification failed.", to_plain_object(payload)
+                "Wave Pay callback hash verification failed.", to_plain_object(payload)
             )
 
         gateway_status = trimmed(payload, "status")
@@ -305,7 +328,7 @@ class _WaveMoneyBase:
             raw=to_plain_object(payload),
         )
 
-    def _initiate_request(self, data: WaveMoneyPaymentData) -> HttpRequest:
+    def _initiate_request(self, data: WavePayPaymentData) -> HttpRequest:
         self.validate(data)
         ttl = (
             self.config.time_to_live_seconds
@@ -325,39 +348,44 @@ class _WaveMoneyBase:
             f'{{"name":{dumps(item.name)},"amount":{to_amount(item.amount)}}}'
             for item in data.items
         )
-        return form_request(
-            f"{self.config.base_url}/payment",
-            {
-                "time_to_live_in_seconds": str(ttl),
-                "merchant_id": self.config.merchant_id,
-                "order_id": data.order_id,
-                "merchant_reference_id": data.merchant_reference_id,
-                "frontend_result_url": data.return_url,
-                "backend_result_url": data.callback_url,
-                "amount": amount,
-                "payment_description": data.description,
-                "merchant_name": merchant_name,
-                "items": f"[{items}]",
-                "hash": self._hash(
-                    [
-                        str(ttl),
-                        self.config.merchant_id,
-                        data.order_id,
-                        amount,
-                        data.callback_url,
-                        data.merchant_reference_id,
-                    ]
-                ),
-            },
-        )
+        body: dict[str, Any] = {
+            "merchant_id": self.config.merchant_id,
+            "order_id": data.order_id,
+            "merchant_reference_id": data.merchant_reference_id,
+            "frontend_result_url": data.return_url,
+            "backend_result_url": data.callback_url,
+            "amount": int(amount),
+            "time_to_live_in_seconds": ttl,
+            "payment_description": data.description,
+            "currency": _CURRENCY,
+            "hash": self._hash(
+                [
+                    str(ttl),
+                    self.config.merchant_id,
+                    data.order_id,
+                    amount,
+                    data.callback_url,
+                    data.merchant_reference_id,
+                ]
+            ),
+            "merchant_name": merchant_name,
+            "items": f"[{items}]",
+        }
+        for name in _ADDITIONAL_FIELDS:
+            value = getattr(data, name)
+            if value:
+                body[name] = value
+        # Pay with Wave API v1.3: a JSON body with amount and time_to_live_in_seconds
+        # as JSON integers and items as a JSON string.
+        return json_request(f"{self.config.base_url}/payment", body)
 
-    def _redirect(self, data: WaveMoneyPaymentData, response: GatewayResponse) -> RedirectPayment:
+    def _redirect(self, data: WavePayPaymentData, response: GatewayResponse) -> RedirectPayment:
         body = response.json()
         transaction_id = get(body, "transaction_id")
         if not response.successful() or get(body, "message") != "success" or transaction_id == "":
             message = _error_message(body)
             raise ApiError(
-                f"Wave Money payment request failed with HTTP {response.status}: {message}",
+                f"Wave Pay payment request failed with HTTP {response.status}: {message}",
                 gateway_code="VALIDATION_ERROR" if "errors" in body else optional(body, "message"),
                 gateway_message=message,
                 http_status=response.status,
@@ -394,16 +422,16 @@ def _error_message(body: LosslessObject) -> str:
     return get(body, "message") or "unexpected response"
 
 
-class WaveMoney(_WaveMoneyBase, SyncGateway):
-    """Wave Money with a synchronous HTTP client.
+class WavePay(_WavePayBase, SyncGateway):
+    """Wave Pay with a synchronous HTTP client.
 
     Redirect payments and callbacks. Wave has no status API, so the callback is
-    the only result. Use :class:`AsyncWaveMoney` in async code.
+    the only result. Use :class:`AsyncWavePay` in async code.
     """
 
     def __init__(
         self,
-        config: WaveMoneyConfig | Mapping[str, Any],
+        config: WavePayConfig | Mapping[str, Any],
         *,
         http_client: httpx.Client | None = None,
     ) -> None:
@@ -416,13 +444,15 @@ class WaveMoney(_WaveMoneyBase, SyncGateway):
         env: EnvSource | None = None,
         *,
         http_client: httpx.Client | None = None,
-    ) -> WaveMoney:
-        """A gateway configured from the ``WAVE_MONEY_*`` environment variables."""
-        return cls(WaveMoneyConfig.from_env(env), http_client=http_client)
+    ) -> WavePay:
+        """A gateway configured from the ``WAVE_PAY_*`` environment variables."""
+        return cls(WavePayConfig.from_env(env), http_client=http_client)
 
-    def initiate(self, data: WaveMoneyPaymentData) -> RedirectPayment:
+    def initiate(self, data: WavePayPaymentData) -> RedirectPayment:
         """Creates a payment request and returns Wave's page to redirect the customer to.
 
+        The request is a JSON post to ``{base_url}/payment`` (currency MMK); the
+        customer approves it at ``{base_redirect_url}/authenticate``.
         Once ``data`` passes validation it fills ``data.merchant_reference_id``
         with a random ID when empty, so store it afterwards. Invalid data is left
         untouched.
@@ -431,12 +461,12 @@ class WaveMoney(_WaveMoneyBase, SyncGateway):
         return self._redirect(data, self._transport.send(request))
 
 
-class AsyncWaveMoney(_WaveMoneyBase, AsyncGateway):
-    """Wave Money with an async HTTP client. The same API as :class:`WaveMoney`, awaited."""
+class AsyncWavePay(_WavePayBase, AsyncGateway):
+    """Wave Pay with an async HTTP client. The same API as :class:`WavePay`, awaited."""
 
     def __init__(
         self,
-        config: WaveMoneyConfig | Mapping[str, Any],
+        config: WavePayConfig | Mapping[str, Any],
         *,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
@@ -449,11 +479,11 @@ class AsyncWaveMoney(_WaveMoneyBase, AsyncGateway):
         env: EnvSource | None = None,
         *,
         http_client: httpx.AsyncClient | None = None,
-    ) -> AsyncWaveMoney:
-        """A gateway configured from the ``WAVE_MONEY_*`` environment variables."""
-        return cls(WaveMoneyConfig.from_env(env), http_client=http_client)
+    ) -> AsyncWavePay:
+        """A gateway configured from the ``WAVE_PAY_*`` environment variables."""
+        return cls(WavePayConfig.from_env(env), http_client=http_client)
 
-    async def initiate(self, data: WaveMoneyPaymentData) -> RedirectPayment:
+    async def initiate(self, data: WavePayPaymentData) -> RedirectPayment:
         """Creates a payment request and returns Wave's page to redirect the customer to."""
         request = self._initiate_request(data)
         return self._redirect(data, await self._transport.send(request))

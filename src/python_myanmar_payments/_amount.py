@@ -19,7 +19,7 @@ class Amount:
     It never passes through a float, so it is never rounded. Build one with
     :meth:`Amount.kyat` for whole amounts, :meth:`Amount.parse` for decimal text or
     :meth:`Amount.of` for any accepted input. Each gateway then checks it against
-    its documented rules (Wave Money, AYA and Yoma MMQR only accept whole kyat,
+    its documented rules (Wave Pay, AYA and Yoma MMQR only accept whole kyat,
     KBZ Pay up to 2 decimal places, CyberSource any).
 
     Amounts are immutable and ``str(amount)`` is the exact text sent to the

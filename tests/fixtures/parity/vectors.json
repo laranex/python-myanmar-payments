@@ -2,7 +2,7 @@
     "source": "Cross-SDK parity vectors. php-, go-, node- and python-myanmar-payments ship this file unchanged and must give the same answer for every case.",
     "secrets": {
         "kbz_pay_app_key": "test-key",
-        "wave_money_secret_key": "test-secret",
+        "wave_pay_secret_key": "test-secret",
         "aya_pay_app_secret": "test-secret",
         "yoma_mmqr_webhook_hashkey": "test-hashkey",
         "yoma_mmqr_webhook_secret": "test-webhook-secret",
@@ -58,7 +58,7 @@
                 }
             }
         ],
-        "wave_money": [
+        "wave_pay": [
             {
                 "name": "numbers hash as the exact text sent and null as \"null\"",
                 "content_type": "application/json",
@@ -116,6 +116,110 @@
                     "status": "successful",
                     "gateway_status": "PAYMENT_CONFIRMED",
                     "gateway_reference": "360",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "status PAYMENT_CONFIRMED is successful",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_CONFIRMED\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"merchantReferenceId\":\"ref-1\",\"frontendResultUrl\":\"https://shop.test/done\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"initiatorMsisdn\":\"0997000000\",\"amount\":\"1000\",\"timeToLiveSeconds\":\"300\",\"paymentDescription\":\"Order 1\",\"currency\":\"MMK\",\"transactionId\":\"225840\",\"paymentRequestId\":\"payment-request-id\",\"requestTime\":\"2024-09-16T09:39:33\",\"additionalField1\":\"[{\\\"name\\\":\\\"Shoes\\\",\\\"amount\\\":1000}]\",\"additionalField2\":\"Shop\",\"additionalField3\":\"note 3\",\"hashValue\":\"90df4db224869744e21997bc79a49c0a4e49b20d5a288f5d1e64dc1748a23d80\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "successful",
+                    "gateway_status": "PAYMENT_CONFIRMED",
+                    "gateway_reference": "225840",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "status BILL_COLLECTION_FAILED is failed",
+                "content_type": "application/json",
+                "body": "{\"status\":\"BILL_COLLECTION_FAILED\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"merchantReferenceId\":\"ref-1\",\"frontendResultUrl\":\"https://shop.test/done\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"initiatorMsisdn\":\"0997000000\",\"amount\":\"1000\",\"timeToLiveSeconds\":\"300\",\"paymentDescription\":\"Order 1\",\"currency\":\"MMK\",\"transactionId\":\"225840\",\"paymentRequestId\":\"payment-request-id\",\"requestTime\":\"2024-09-16T09:39:33\",\"additionalField1\":\"[{\\\"name\\\":\\\"Shoes\\\",\\\"amount\\\":1000}]\",\"additionalField2\":\"Shop\",\"additionalField3\":\"note 3\",\"hashValue\":\"4d311504403fd600f05844fa9d24c85bab11c146be5e3567fa92aec87eb052e3\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "failed",
+                    "gateway_status": "BILL_COLLECTION_FAILED",
+                    "gateway_reference": "225840",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "status INSUFFICIENT_BALANCE is failed",
+                "content_type": "application/json",
+                "body": "{\"status\":\"INSUFFICIENT_BALANCE\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"merchantReferenceId\":\"ref-1\",\"frontendResultUrl\":\"https://shop.test/done\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"initiatorMsisdn\":\"0997000000\",\"amount\":\"1000\",\"timeToLiveSeconds\":\"300\",\"paymentDescription\":\"Order 1\",\"currency\":\"MMK\",\"transactionId\":\"225840\",\"paymentRequestId\":\"payment-request-id\",\"requestTime\":\"2024-09-16T09:39:33\",\"additionalField1\":\"[{\\\"name\\\":\\\"Shoes\\\",\\\"amount\\\":1000}]\",\"additionalField2\":\"Shop\",\"additionalField3\":\"note 3\",\"hashValue\":\"cadfa480d6796f7313c2dfb48513c36299e88d86089ecc3632d72b98abaea91f\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "failed",
+                    "gateway_status": "INSUFFICIENT_BALANCE",
+                    "gateway_reference": "225840",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "status ACCOUNT_LOCKED is failed",
+                "content_type": "application/json",
+                "body": "{\"status\":\"ACCOUNT_LOCKED\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"merchantReferenceId\":\"ref-1\",\"frontendResultUrl\":\"https://shop.test/done\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"initiatorMsisdn\":\"0997000000\",\"amount\":\"1000\",\"timeToLiveSeconds\":\"300\",\"paymentDescription\":\"Order 1\",\"currency\":\"MMK\",\"transactionId\":\"225840\",\"paymentRequestId\":\"payment-request-id\",\"requestTime\":\"2024-09-16T09:39:33\",\"additionalField1\":\"[{\\\"name\\\":\\\"Shoes\\\",\\\"amount\\\":1000}]\",\"additionalField2\":\"Shop\",\"additionalField3\":\"note 3\",\"hashValue\":\"e72cd4e16120da9c94db7970ba71220f80624a62c63c76aec507c60f0ba99dcc\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "failed",
+                    "gateway_status": "ACCOUNT_LOCKED",
+                    "gateway_reference": "225840",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "status SCHEDULER_TRANSACTION_TIMED_OUT is expired",
+                "content_type": "application/json",
+                "body": "{\"status\":\"SCHEDULER_TRANSACTION_TIMED_OUT\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"merchantReferenceId\":\"ref-1\",\"frontendResultUrl\":\"https://shop.test/done\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"initiatorMsisdn\":\"0997000000\",\"amount\":\"1000\",\"timeToLiveSeconds\":\"300\",\"paymentDescription\":\"Order 1\",\"currency\":\"MMK\",\"transactionId\":\"225840\",\"paymentRequestId\":\"payment-request-id\",\"requestTime\":\"2024-09-16T09:39:33\",\"additionalField1\":\"[{\\\"name\\\":\\\"Shoes\\\",\\\"amount\\\":1000}]\",\"additionalField2\":\"Shop\",\"additionalField3\":\"note 3\",\"hashValue\":\"7ddee1370db2eff4d81bb82e2b9657f9c6213f014016f0a299515ba6c1aae487\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "expired",
+                    "gateway_status": "SCHEDULER_TRANSACTION_TIMED_OUT",
+                    "gateway_reference": "225840",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "status TRANSACTION_TIMED_OUT is expired",
+                "content_type": "application/json",
+                "body": "{\"status\":\"TRANSACTION_TIMED_OUT\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"merchantReferenceId\":\"ref-1\",\"frontendResultUrl\":\"https://shop.test/done\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"initiatorMsisdn\":\"0997000000\",\"amount\":\"1000\",\"timeToLiveSeconds\":\"300\",\"paymentDescription\":\"Order 1\",\"currency\":\"MMK\",\"transactionId\":\"225840\",\"paymentRequestId\":\"payment-request-id\",\"requestTime\":\"2024-09-16T09:39:33\",\"additionalField1\":\"[{\\\"name\\\":\\\"Shoes\\\",\\\"amount\\\":1000}]\",\"additionalField2\":\"Shop\",\"additionalField3\":\"note 3\",\"hashValue\":\"54ab603f5599e391482e52cc0768b57f4c2787ef2c722e5c197033da09978938\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "expired",
+                    "gateway_status": "TRANSACTION_TIMED_OUT",
+                    "gateway_reference": "225840",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "status PAYMENT_REQUEST_CANCELLED is canceled",
+                "content_type": "application/json",
+                "body": "{\"status\":\"PAYMENT_REQUEST_CANCELLED\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"merchantReferenceId\":\"ref-1\",\"frontendResultUrl\":\"https://shop.test/done\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"initiatorMsisdn\":\"0997000000\",\"amount\":\"1000\",\"timeToLiveSeconds\":\"300\",\"paymentDescription\":\"Order 1\",\"currency\":\"MMK\",\"transactionId\":\"225840\",\"paymentRequestId\":\"payment-request-id\",\"requestTime\":\"2024-09-16T09:39:33\",\"additionalField1\":\"[{\\\"name\\\":\\\"Shoes\\\",\\\"amount\\\":1000}]\",\"additionalField2\":\"Shop\",\"additionalField3\":\"note 3\",\"hashValue\":\"72dad3f60056eeadff8b01b446db5e685ef6c47dfe42538237fbcb0187df122f\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "canceled",
+                    "gateway_status": "PAYMENT_REQUEST_CANCELLED",
+                    "gateway_reference": "225840",
+                    "amount": "1000"
+                }
+            },
+            {
+                "name": "status NEW_STATUS is unknown",
+                "content_type": "application/json",
+                "body": "{\"status\":\"NEW_STATUS\",\"merchantId\":\"merchant\",\"orderId\":\"ORDER_1\",\"merchantReferenceId\":\"ref-1\",\"frontendResultUrl\":\"https://shop.test/done\",\"backendResultUrl\":\"https://shop.test/wave/callback\",\"initiatorMsisdn\":\"0997000000\",\"amount\":\"1000\",\"timeToLiveSeconds\":\"300\",\"paymentDescription\":\"Order 1\",\"currency\":\"MMK\",\"transactionId\":\"225840\",\"paymentRequestId\":\"payment-request-id\",\"requestTime\":\"2024-09-16T09:39:33\",\"additionalField1\":\"[{\\\"name\\\":\\\"Shoes\\\",\\\"amount\\\":1000}]\",\"additionalField2\":\"Shop\",\"additionalField3\":\"note 3\",\"hashValue\":\"29dc0ebc50d0f7b7fc839e36978d45cc0b7c4adc1be92fe7c6dd4ebef63f411f\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "ORDER_1",
+                    "status": "unknown",
+                    "gateway_status": "NEW_STATUS",
+                    "gateway_reference": "225840",
                     "amount": "1000"
                 }
             }
@@ -507,14 +611,14 @@
             "key": "app_id",
             "message": "The kbz_pay configuration is missing [app_id]."
         },
-        "whole_amounts_only": "Wave Money does not accept decimal amounts; the amount field must be a whole number.",
+        "whole_amounts_only": "Wave Pay does not accept decimal amounts; the amount field must be a whole number.",
         "aya_whole_amounts_only": "AYA Payment Gateway does not accept decimal amounts; the amount field must be a whole number.",
         "kbz_decimals": "KBZ Pay accepts at most 2 decimal places; the amount field has 3.",
         "kbz_time_to_live_range": "The timeToLiveMinutes field must be between 1 and 120.",
         "configuration_invalid": {
-            "gateway": "wave_money",
+            "gateway": "wave_pay",
             "key": "time_to_live_in_seconds",
-            "message": "The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+            "message": "The wave_pay configuration [time_to_live_in_seconds] must be a whole number greater than 0."
         }
     },
     "config": {
@@ -525,12 +629,12 @@
             "KBZ_PAY_BASE_URL": "https://api.kbzpay.com/payment/gateway",
             "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://wap.kbzpay.com/pgw/pwa/#/",
             "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES": "15",
-            "WAVE_MONEY_MERCHANT_ID": "merchant",
-            "WAVE_MONEY_SECRET_KEY": "test-secret",
-            "WAVE_MONEY_MERCHANT_NAME": "Shop",
-            "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS": "300",
-            "WAVE_MONEY_BASE_URL": "https://payments.wavemoney.io",
-            "WAVE_MONEY_BASE_REDIRECT_URL": "https://payments.wavemoney.io",
+            "WAVE_PAY_MERCHANT_ID": "merchant",
+            "WAVE_PAY_SECRET_KEY": "test-secret",
+            "WAVE_PAY_MERCHANT_NAME": "Shop",
+            "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS": "300",
+            "WAVE_PAY_BASE_URL": "https://payments.wavemoney.io",
+            "WAVE_PAY_BASE_REDIRECT_URL": "https://payments.wavemoney.io",
             "AYA_PAY_APP_KEY": "app-key",
             "AYA_PAY_APP_SECRET": "test-secret",
             "AYA_PAY_BASE_URL": "https://pgw.ayainnovation.com",
@@ -556,7 +660,7 @@
                 "api_url": "https://api.kbzpay.com/payment/gateway",
                 "pwa_url": "https://wap.kbzpay.com/pgw/pwa/#/"
             },
-            "wave_money": {
+            "wave_pay": {
                 "base_url": "https://payments.wavemoney.io",
                 "base_redirect_url": "https://payments.wavemoney.io"
             },
@@ -574,8 +678,8 @@
             "env": {
                 "KBZ_PAY_BASE_URL": "http://api-uat.kbzpay.com/payment/gateway/uat",
                 "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://static.kbzpay.com/pgw/uat/pwa/#/",
-                "WAVE_MONEY_BASE_URL": "https://preprodpayments.wavemoney.io:8107",
-                "WAVE_MONEY_BASE_REDIRECT_URL": "https://preprodpayments.wavemoney.io",
+                "WAVE_PAY_BASE_URL": "https://preprodpayments.wavemoney.io:8107",
+                "WAVE_PAY_BASE_REDIRECT_URL": "https://preprodpayments.wavemoney.io:8107",
                 "AYA_PAY_BASE_URL": "https://uat-pgw.ayainnovation.com",
                 "YOMA_MMQR_BASE_URL": "https://devapi.yomabank.net",
                 "CYBER_SOURCE_BASE_URL": "https://testsecureacceptance.cybersource.com"
@@ -585,9 +689,9 @@
                     "api_url": "http://api-uat.kbzpay.com/payment/gateway/uat",
                     "pwa_url": "https://static.kbzpay.com/pgw/uat/pwa/#/"
                 },
-                "wave_money": {
+                "wave_pay": {
                     "base_url": "https://preprodpayments.wavemoney.io:8107",
-                    "base_redirect_url": "https://preprodpayments.wavemoney.io"
+                    "base_redirect_url": "https://preprodpayments.wavemoney.io:8107"
                 },
                 "aya_pay": {
                     "base_url": "https://uat-pgw.ayainnovation.com"
@@ -644,46 +748,46 @@
                 "message": "The kbz_pay configuration is missing [merchant_code]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_MERCHANT_ID",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_MERCHANT_ID",
                 "value": null,
                 "key": "merchant_id",
-                "message": "The wave_money configuration is missing [merchant_id]."
+                "message": "The wave_pay configuration is missing [merchant_id]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_MERCHANT_ID",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_MERCHANT_ID",
                 "value": "   ",
                 "key": "merchant_id",
-                "message": "The wave_money configuration is missing [merchant_id]."
+                "message": "The wave_pay configuration is missing [merchant_id]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_SECRET_KEY",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_SECRET_KEY",
                 "value": null,
                 "key": "secret_key",
-                "message": "The wave_money configuration is missing [secret_key]."
+                "message": "The wave_pay configuration is missing [secret_key]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_SECRET_KEY",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_SECRET_KEY",
                 "value": "   ",
                 "key": "secret_key",
-                "message": "The wave_money configuration is missing [secret_key]."
+                "message": "The wave_pay configuration is missing [secret_key]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_MERCHANT_NAME",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_MERCHANT_NAME",
                 "value": null,
                 "key": "merchant_name",
-                "message": "The wave_money configuration is missing [merchant_name]."
+                "message": "The wave_pay configuration is missing [merchant_name]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_MERCHANT_NAME",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_MERCHANT_NAME",
                 "value": "   ",
                 "key": "merchant_name",
-                "message": "The wave_money configuration is missing [merchant_name]."
+                "message": "The wave_pay configuration is missing [merchant_name]."
             },
             {
                 "gateway": "aya_pay",
@@ -840,32 +944,32 @@
                 "message": "The cyber_source configuration is missing [base_url]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS",
                 "value": "0",
                 "key": "time_to_live_in_seconds",
-                "message": "The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+                "message": "The wave_pay configuration [time_to_live_in_seconds] must be a whole number greater than 0."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS",
                 "value": "-300",
                 "key": "time_to_live_in_seconds",
-                "message": "The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+                "message": "The wave_pay configuration [time_to_live_in_seconds] must be a whole number greater than 0."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS",
                 "value": "five",
                 "key": "time_to_live_in_seconds",
-                "message": "The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+                "message": "The wave_pay configuration [time_to_live_in_seconds] must be a whole number greater than 0."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS",
                 "value": "1.5",
                 "key": "time_to_live_in_seconds",
-                "message": "The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0."
+                "message": "The wave_pay configuration [time_to_live_in_seconds] must be a whole number greater than 0."
             },
             {
                 "gateway": "kbz_pay",
@@ -973,53 +1077,53 @@
                 "message": "The kbz_pay configuration is missing [time_to_live_in_minutes]."
             },
             {
-                "gateway": "wave_money",
+                "gateway": "wave_pay",
                 "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
                 "value": "0",
                 "key": "timeout_in_seconds",
-                "message": "The wave_money configuration [timeout_in_seconds] must be a whole number greater than 0."
+                "message": "The wave_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_BASE_URL",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_BASE_URL",
                 "value": null,
                 "key": "base_url",
-                "message": "The wave_money configuration is missing [base_url]."
+                "message": "The wave_pay configuration is missing [base_url]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_BASE_URL",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_BASE_URL",
                 "value": "   ",
                 "key": "base_url",
-                "message": "The wave_money configuration is missing [base_url]."
+                "message": "The wave_pay configuration is missing [base_url]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_BASE_REDIRECT_URL",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_BASE_REDIRECT_URL",
                 "value": null,
                 "key": "base_redirect_url",
-                "message": "The wave_money configuration is missing [base_redirect_url]."
+                "message": "The wave_pay configuration is missing [base_redirect_url]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_BASE_REDIRECT_URL",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_BASE_REDIRECT_URL",
                 "value": "   ",
                 "key": "base_redirect_url",
-                "message": "The wave_money configuration is missing [base_redirect_url]."
+                "message": "The wave_pay configuration is missing [base_redirect_url]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS",
                 "value": null,
                 "key": "time_to_live_in_seconds",
-                "message": "The wave_money configuration is missing [time_to_live_in_seconds]."
+                "message": "The wave_pay configuration is missing [time_to_live_in_seconds]."
             },
             {
-                "gateway": "wave_money",
-                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "gateway": "wave_pay",
+                "variable": "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS",
                 "value": "   ",
                 "key": "time_to_live_in_seconds",
-                "message": "The wave_money configuration is missing [time_to_live_in_seconds]."
+                "message": "The wave_pay configuration is missing [time_to_live_in_seconds]."
             },
             {
                 "gateway": "aya_pay",
@@ -1087,7 +1191,7 @@
             "timeout_in_seconds": 30
         }
     },
-    "wave_money_request_overrides": {
+    "wave_pay_request_overrides": {
         "config": {
             "merchant_id": "testmerchantID",
             "secret_key": "test-secret",
@@ -1113,7 +1217,7 @@
                 "time_to_live_in_seconds": null,
                 "expected": {
                     "merchant_name": "Configured Shop",
-                    "time_to_live_in_seconds": "300",
+                    "time_to_live_in_seconds": 300,
                     "hash": "0921915e2f0a948b2cffd5a9b22325b044a3c1544d2e3d65612a4527412a38a5"
                 }
             },
@@ -1122,7 +1226,7 @@
                 "time_to_live_in_seconds": 600,
                 "expected": {
                     "merchant_name": "Tikkat",
-                    "time_to_live_in_seconds": "600",
+                    "time_to_live_in_seconds": 600,
                     "hash": "ddff812ada6da114c807dc2a35cdf8149db2e7a81c7bdf51952a6f232ddb7684"
                 }
             }
@@ -1157,6 +1261,208 @@
                 "config": "30",
                 "payment": 10,
                 "timeout_express": "10m"
+            }
+        ]
+    },
+    "wave_pay_request": {
+        "source": "Pay with Wave API Spec v1.3, section 3.2: JSON body; amount and time_to_live_in_seconds are JSON integers, items is a JSON string, additional fields are sent only when set (not null or empty).",
+        "config": {
+            "merchant_id": "testmerchantID",
+            "secret_key": "test-secret",
+            "merchant_name": "Shop",
+            "base_url": "https://preprodpayments.wavemoney.io:8107",
+            "base_redirect_url": "https://preprodpayments.wavemoney.io:8107",
+            "time_to_live_in_seconds": 500
+        },
+        "response": {
+            "status": 200,
+            "body": {
+                "message": "success",
+                "transaction_id": "enc/123+abc"
+            }
+        },
+        "expected": {
+            "method": "POST",
+            "url": "https://preprodpayments.wavemoney.io:8107/payment",
+            "headers": {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+            "redirect_url": "https://preprodpayments.wavemoney.io:8107/authenticate?transaction_id=enc%2F123%2Babc",
+            "gateway_reference": "enc/123+abc"
+        },
+        "cases": [
+            {
+                "name": "without additional fields",
+                "data": {
+                    "order_id": "ORDER_1",
+                    "merchant_reference_id": "ref-001",
+                    "callback_url": "https://shop.test/wave/callback",
+                    "return_url": "https://shop.test/done",
+                    "description": "Order 1 အော်ဒါ",
+                    "items": [
+                        [
+                            "Shoes/Sandals ဖိနပ်",
+                            600
+                        ],
+                        [
+                            "Socks",
+                            400
+                        ]
+                    ]
+                },
+                "expected_body": {
+                    "merchant_id": "testmerchantID",
+                    "order_id": "ORDER_1",
+                    "merchant_reference_id": "ref-001",
+                    "frontend_result_url": "https://shop.test/done",
+                    "backend_result_url": "https://shop.test/wave/callback",
+                    "amount": 1000,
+                    "time_to_live_in_seconds": 500,
+                    "payment_description": "Order 1 အော်ဒါ",
+                    "currency": "MMK",
+                    "hash": "accfa93e5db01d916b6cc50907b50e3cff2dbd591c5287fc2b7d2693e169bed5",
+                    "merchant_name": "Shop",
+                    "items": "[{\"name\":\"Shoes/Sandals ဖိနပ်\",\"amount\":600},{\"name\":\"Socks\",\"amount\":400}]"
+                }
+            },
+            {
+                "name": "additional fields are sent when set; null and empty ones are left out",
+                "data": {
+                    "order_id": "ORDER_1",
+                    "merchant_reference_id": "ref-001",
+                    "callback_url": "https://shop.test/wave/callback",
+                    "return_url": "https://shop.test/done",
+                    "description": "Order 1 အော်ဒါ",
+                    "items": [
+                        [
+                            "Shoes/Sandals ဖိနပ်",
+                            600
+                        ],
+                        [
+                            "Socks",
+                            400
+                        ]
+                    ],
+                    "additional_field_3": "Additional Information 1",
+                    "additional_field_4": "",
+                    "additional_field_5": null
+                },
+                "expected_body": {
+                    "merchant_id": "testmerchantID",
+                    "order_id": "ORDER_1",
+                    "merchant_reference_id": "ref-001",
+                    "frontend_result_url": "https://shop.test/done",
+                    "backend_result_url": "https://shop.test/wave/callback",
+                    "amount": 1000,
+                    "time_to_live_in_seconds": 500,
+                    "payment_description": "Order 1 အော်ဒါ",
+                    "currency": "MMK",
+                    "hash": "accfa93e5db01d916b6cc50907b50e3cff2dbd591c5287fc2b7d2693e169bed5",
+                    "merchant_name": "Shop",
+                    "items": "[{\"name\":\"Shoes/Sandals ဖိနပ်\",\"amount\":600},{\"name\":\"Socks\",\"amount\":400}]",
+                    "additional_field_3": "Additional Information 1"
+                }
+            }
+        ]
+    },
+    "wave_pay_limits": {
+        "source": "Pay with Wave API Spec v1.3, section 3.2.1: maximum lengths, counted in bytes of UTF-8 like every other limit in these SDKs.",
+        "data": {
+            "order_id": "ORDER_1",
+            "merchant_reference_id": "ref-001",
+            "callback_url": "https://shop.test/cb",
+            "return_url": "https://shop.test/done",
+            "description": "Order 1",
+            "items": [
+                [
+                    "A",
+                    1000
+                ]
+            ]
+        },
+        "valid": [
+            {
+                "field": "orderId",
+                "value": "OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO",
+                "error": null
+            },
+            {
+                "field": "merchantReferenceId",
+                "value": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+                "error": null
+            },
+            {
+                "field": "callbackUrl",
+                "value": "https://shop.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "error": null
+            },
+            {
+                "field": "returnUrl",
+                "value": "https://shop.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "error": null
+            },
+            {
+                "field": "description",
+                "value": "ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "error": null
+            },
+            {
+                "field": "additionalField3",
+                "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                "error": null
+            },
+            {
+                "field": "additionalField4",
+                "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                "error": null
+            },
+            {
+                "field": "additionalField5",
+                "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                "error": null
+            }
+        ],
+        "invalid": [
+            {
+                "field": "orderId",
+                "value": "OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO",
+                "error": "The orderId field must not be greater than 100 characters."
+            },
+            {
+                "field": "merchantReferenceId",
+                "value": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+                "error": "The merchantReferenceId field must not be greater than 100 characters."
+            },
+            {
+                "field": "callbackUrl",
+                "value": "https://shop.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "error": "The callbackUrl field must not be greater than 255 characters."
+            },
+            {
+                "field": "returnUrl",
+                "value": "https://shop.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "error": "The returnUrl field must not be greater than 255 characters."
+            },
+            {
+                "field": "description",
+                "value": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "error": "The description field must not be greater than 255 characters."
+            },
+            {
+                "field": "additionalField3",
+                "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                "error": "The additionalField3 field must not be greater than 50 characters."
+            },
+            {
+                "field": "additionalField4",
+                "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                "error": "The additionalField4 field must not be greater than 50 characters."
+            },
+            {
+                "field": "additionalField5",
+                "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                "error": "The additionalField5 field must not be greater than 50 characters."
             }
         ]
     }
