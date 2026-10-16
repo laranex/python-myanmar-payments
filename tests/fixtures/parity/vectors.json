@@ -1951,6 +1951,30 @@
             {
                 "url": "http://[::1",
                 "valid": false
+            },
+            {
+                "url": "https://shop.test:/cb",
+                "valid": false
+            },
+            {
+                "url": "https://shop.test:8a/cb",
+                "valid": false
+            },
+            {
+                "url": "http://h.test:8!/",
+                "valid": false
+            },
+            {
+                "url": "https://user:pass@shop.test:8080/cb",
+                "valid": true
+            },
+            {
+                "url": "https://shop.test:123456/cb",
+                "valid": false
+            },
+            {
+                "url": "http://[::1]:/cb",
+                "valid": false
             }
         ]
     },

@@ -186,7 +186,7 @@ def is_http_url(value: str) -> bool:
     if match is None:
         return False
     port = match.group("port")
-    if port is not None and port != "" and (not port.isdigit() or int(port) > 65535):
+    if port is not None and not (1 <= len(port) <= 5 and port.isdigit() and int(port) <= 65535):
         return False
     host = match.group("host")
     if host.startswith("["):
