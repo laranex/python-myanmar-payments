@@ -13,8 +13,6 @@ from ._amount import Amount, AmountInput, to_amount
 from ._callback import CallbackRequest, lossless_body
 from ._errors import (
     ApiError,
-    ConfigurationError,
-    InvalidPaymentDataError,
     SignatureVerificationError,
 )
 from ._http import (
@@ -34,11 +32,10 @@ from ._support import (
     default_env,
     env_first,
     hmac_sha256_hex,
-    optional_integer,
-    optional_setting,
     query_escape,
     random_hex,
     read_timeout,
+    require_seconds,
     require_setting,
     safe_equal,
     trim_url,
@@ -58,10 +55,10 @@ __all__ = [
 class WaveMoneyConfig:
     """Wave Money credentials and endpoints.
 
-    Every setting except the HTTP timeout and the URL overrides is required; a
-    missing one raises a :class:`~python_myanmar_payments.ConfigurationError`.
-    The timeout defaults to :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS`
-    and the URLs to production.
+    Every setting except the HTTP timeout is required; a missing or blank one
+    raises a :class:`~python_myanmar_payments.ConfigurationError`. The timeout
+    defaults to :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS`.
+    :attr:`PRODUCTION_URL` names production's API and payment page host.
     """
 
     PRODUCTION_URL: ClassVar[str] = "https://payments.wavemoney.io"
@@ -72,15 +69,19 @@ class WaveMoneyConfig:
     """The hash secret key Wave issued."""
     merchant_name: str
     """Your business name, shown on Wave's payment page."""
-    time_to_live_seconds: int | None
+    time_to_live_seconds: int
     """Seconds the customer has to pay, greater than 0. A payment's own
-    ``time_to_live_seconds`` overrides it; with neither set, ``initiate()`` raises
-    :class:`~python_myanmar_payments.InvalidPaymentDataError`."""
+    ``time_to_live_seconds`` overrides it."""
     timeout_seconds: int
     """Seconds before the default HTTP client gives up on a request (default 30)."""
     base_url: str
-    """The API base URL in use: payments are requested at its ``/payment`` and the
-    customer is sent to its ``/authenticate``."""
+    """The API base URL, e.g. :attr:`PRODUCTION_URL` or
+    ``https://preprodpayments.wavemoney.io:8107``. Payments are requested at its
+    ``/payment``."""
+    base_redirect_url: str
+    """The host the customer is sent to, e.g. :attr:`PRODUCTION_URL` or
+    ``https://preprodpayments.wavemoney.io``. The customer approves the payment at
+    its ``/authenticate``."""
 
     def __init__(
         self,
@@ -90,31 +91,29 @@ class WaveMoneyConfig:
         merchant_name: str = "",
         time_to_live_seconds: int | str | None = None,
         timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
-        base_url: str | None = None,
+        base_url: str = "",
+        base_redirect_url: str = "",
     ) -> None:
         self.merchant_id = require_setting("wave_money", "merchant_id", merchant_id)
         self.secret_key = require_setting("wave_money", "secret_key", secret_key)
         self.merchant_name = require_setting("wave_money", "merchant_name", merchant_name)
-        ttl = optional_integer(
-            "wave_money",
-            "time_to_live_in_seconds",
-            time_to_live_seconds,
-            "a whole number greater than 0",
+        self.base_url = trim_url(require_setting("wave_money", "base_url", base_url))
+        self.base_redirect_url = trim_url(
+            require_setting("wave_money", "base_redirect_url", base_redirect_url)
         )
-        if ttl is not None and ttl <= 0:
-            raise ConfigurationError("wave_money", "time_to_live_in_seconds", invalid=True)
-        self.time_to_live_seconds = ttl
+        self.time_to_live_seconds = require_seconds(
+            "wave_money", "time_to_live_in_seconds", time_to_live_seconds
+        )
         self.timeout_seconds = read_timeout("wave_money", timeout_seconds)
-        self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> WaveMoneyConfig:
         """Reads the ``WAVE_MONEY_*`` environment variables.
 
         ``WAVE_MONEY_MERCHANT_ID``, ``WAVE_MONEY_SECRET_KEY``,
-        ``WAVE_MONEY_MERCHANT_NAME``, ``WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS``,
-        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT`` and ``WAVE_MONEY_BASE_URL``. Defaults to
-        ``os.environ``.
+        ``WAVE_MONEY_MERCHANT_NAME``, ``WAVE_MONEY_BASE_URL``,
+        ``WAVE_MONEY_BASE_REDIRECT_URL``, ``WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS`` and
+        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``. Defaults to ``os.environ``.
         """
         env = default_env() if env is None else env
         return cls(
@@ -124,6 +123,7 @@ class WaveMoneyConfig:
             time_to_live_seconds=env_first(env, "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS"),
             timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),
             base_url=env_first(env, "WAVE_MONEY_BASE_URL"),
+            base_redirect_url=env_first(env, "WAVE_MONEY_BASE_REDIRECT_URL"),
         )
 
     def __repr__(self) -> str:
@@ -166,8 +166,8 @@ class WaveMoneyPaymentData:
     """Your business name shown on Wave's page for this payment. Defaults to the
     configured ``merchant_name``."""
     time_to_live_seconds: int | None = None
-    """Seconds the customer has to pay this payment, greater than 0. Defaults to the
-    configured ``time_to_live_seconds``; one of the two is required."""
+    """Seconds the customer has to pay this payment, greater than 0. Overrides the
+    configured ``time_to_live_seconds`` for this payment."""
 
 
 _STATUSES: Mapping[str, PaymentStatus] = {
@@ -312,13 +312,6 @@ class _WaveMoneyBase:
             if data.time_to_live_seconds is None
             else data.time_to_live_seconds
         )
-        if ttl is None:
-            raise InvalidPaymentDataError(
-                {
-                    "time_to_live_seconds": "The time_to_live_seconds field is required when "
-                    "the wave_money configuration has no [time_to_live_in_seconds]."
-                }
-            )
         if not data.merchant_reference_id:
             data.merchant_reference_id = random_hex()
 
@@ -372,7 +365,7 @@ class _WaveMoneyBase:
             )
         return RedirectPayment(
             order_id=data.order_id,
-            url=f"{self.config.base_url}/authenticate?transaction_id="
+            url=f"{self.config.base_redirect_url}/authenticate?transaction_id="
             f"{query_escape(transaction_id)}",
             gateway_reference=transaction_id,
             raw=to_plain_object(body),

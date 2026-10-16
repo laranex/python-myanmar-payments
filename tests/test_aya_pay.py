@@ -23,15 +23,12 @@ from python_myanmar_payments import (
     SignatureVerificationError,
 )
 from tests.conftest import Clock
-from tests.helpers import NOW, FakeServer, fixture, hmac_hex, make, run
+from tests.helpers import NOW, FakeServer, fixture, gateway_config, hmac_hex, make, run
 
 SECRET = "test-secret"
-CONFIG: dict[str, Any] = {
-    "app_key": "app-key",
-    "app_secret": SECRET,
-    "timeout_seconds": 30,
-    "base_url": "https://aya.test",
-}
+CONFIG: dict[str, Any] = gateway_config(
+    "aya_pay", app_secret=SECRET, timeout_seconds=30, base_url="https://aya.test"
+)
 
 
 def gateway(mode: str, server: FakeServer | None = None) -> Any:
@@ -399,10 +396,24 @@ class TestAyaPay:
 
 
 class TestAyaPayConfig:
-    def test_defaults_to_production(self) -> None:
-        config = AyaPayConfig(app_key="k", app_secret="s", timeout_seconds=30)
-        assert config.base_url == AyaPayConfig.PRODUCTION_URL
+    def test_uses_the_configured_base_url(self) -> None:
+        config = AyaPayConfig(
+            app_key="k", app_secret="s", timeout_seconds=30, base_url=AyaPayConfig.PRODUCTION_URL
+        )
+        assert config.base_url == "https://pgw.ayainnovation.com"
         assert repr(config) == "AyaPayConfig(app_key='k')"
+
+    @pytest.mark.parametrize("blank", [None, "", "   "])
+    def test_requires_the_base_url(self, blank: Any) -> None:
+        with pytest.raises(ConfigurationError) as info:
+            AyaPayConfig(**{**CONFIG, "base_url": blank})
+        assert info.value.gateway == "aya_pay"
+        assert info.value.key == "base_url"
+        assert str(info.value) == "The aya_pay configuration is missing [base_url]."
+        env = {"AYA_PAY_APP_KEY": "k", "AYA_PAY_APP_SECRET": "s"}
+        for extra in ({}, {"AYA_PAY_BASE_URL": "  ", "AYA_PGW_BASE_URL": " "}):
+            with pytest.raises(ConfigurationError, match=r"missing \[base_url\]"):
+                AyaPayConfig.from_env({**env, **extra})
 
     def test_reads_the_environment_with_the_aya_pgw_fallbacks(self, mode: str) -> None:
         env = {

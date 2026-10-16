@@ -30,7 +30,6 @@ from ._support import (
     default_env,
     env_first,
     hmac_sha256_hex,
-    optional_setting,
     read_timeout,
     require_setting,
     safe_equal,
@@ -53,10 +52,10 @@ __all__ = [
 class AyaPayConfig:
     """AYA Payment Gateway (APG) credentials and endpoints.
 
-    Every setting except the HTTP timeout and the URL override is required; a
-    missing one raises a :class:`~python_myanmar_payments.ConfigurationError`.
-    The timeout defaults to :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS`
-    and the URL to production.
+    Every setting except the HTTP timeout is required; a missing or blank one
+    raises a :class:`~python_myanmar_payments.ConfigurationError`. The timeout
+    defaults to :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS`.
+    :attr:`PRODUCTION_URL` names production's base URL.
     """
 
     PRODUCTION_URL: ClassVar[str] = "https://pgw.ayainnovation.com"
@@ -68,7 +67,8 @@ class AyaPayConfig:
     timeout_seconds: int
     """Seconds before the default HTTP client gives up on a request (default 30)."""
     base_url: str
-    """The base URL in use."""
+    """The gateway base URL, e.g. :attr:`PRODUCTION_URL` or
+    ``https://uat-pgw.ayainnovation.com``."""
 
     def __init__(
         self,
@@ -76,20 +76,20 @@ class AyaPayConfig:
         app_key: str = "",
         app_secret: str = "",
         timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
-        base_url: str | None = None,
+        base_url: str = "",
     ) -> None:
         self.app_key = require_setting("aya_pay", "app_key", app_key)
         self.app_secret = require_setting("aya_pay", "app_secret", app_secret)
         self.timeout_seconds = read_timeout("aya_pay", timeout_seconds)
-        self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
+        self.base_url = trim_url(require_setting("aya_pay", "base_url", base_url))
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> AyaPayConfig:
         """Reads the ``AYA_PAY_*`` environment variables.
 
-        ``AYA_PAY_APP_KEY``, ``AYA_PAY_APP_SECRET``, ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``
-        and ``AYA_PAY_BASE_URL``, falling back to the ``AYA_PGW_*`` names. Defaults
-        to ``os.environ``.
+        ``AYA_PAY_APP_KEY``, ``AYA_PAY_APP_SECRET``, ``AYA_PAY_BASE_URL`` and
+        ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``, falling back to the ``AYA_PGW_*`` names.
+        Defaults to ``os.environ``.
         """
         env = default_env() if env is None else env
         return cls(

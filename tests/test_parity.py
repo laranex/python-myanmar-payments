@@ -35,7 +35,7 @@ from python_myanmar_payments import (
     YomaMmqr,
     YomaMmqrConfig,
 )
-from tests.helpers import FakeServer, fixture, make, run
+from tests.helpers import FakeServer, fixture, gateway_config, make, run
 
 VECTORS = fixture("parity/vectors.json")
 SECRETS: dict[str, str] = VECTORS["secrets"]
@@ -76,7 +76,8 @@ CALLBACKS = [
 
 @pytest.mark.parametrize(("gateway", "case"), CALLBACKS)
 def test_callbacks(gateway: str, case: dict[str, Any]) -> None:
-    request = CallbackRequest(body=case["body"], headers={"Content-Type": case["content_type"]})
+    headers = {"Content-Type": case["content_type"], **case.get("headers", {})}
+    request = CallbackRequest(body=case["body"], headers=headers)
     expected = case["expected"]
     handle = gateways()[gateway].handle_callback
     if not expected["valid"]:
@@ -115,12 +116,16 @@ def test_amount_equals(case: dict[str, Any]) -> None:
 
 
 def urls(config: Any) -> dict[str, str]:
-    names = ("api_url", "pwa_url") if isinstance(config, KbzPayConfig) else ("base_url",)
+    names: tuple[str, ...] = ("base_url",)
+    if isinstance(config, KbzPayConfig):
+        names = ("api_url", "pwa_url")
+    elif isinstance(config, WaveMoneyConfig):
+        names = ("base_url", "base_redirect_url")
     return {name: getattr(config, name) for name in names}
 
 
 @pytest.mark.parametrize("gateway", list(CONFIGS))
-def test_config_defaults_to_production(gateway: str) -> None:
+def test_config_reads_the_production_urls(gateway: str) -> None:
     config = CONFIGS[gateway].from_env(CONFIG_ENV)
     assert urls(config) == CONFIG["urls"][gateway]
     if gateway != "cyber_source":
@@ -130,7 +135,7 @@ def test_config_defaults_to_production(gateway: str) -> None:
 
 
 @pytest.mark.parametrize("gateway", list(CONFIGS))
-def test_config_url_overrides(gateway: str) -> None:
+def test_config_reads_the_uat_urls(gateway: str) -> None:
     config = CONFIGS[gateway].from_env({**CONFIG_ENV, **CONFIG["uat"]["env"]})
     assert urls(config) == CONFIG["uat"]["urls"][gateway]
 
@@ -177,15 +182,7 @@ def test_yoma_mmqr_token_cache_key() -> None:
         {"access_token": "T", "expires_in": 3600}, {"qrString": "img", "refLabel": "R"}
     )
     YomaMmqr(
-        {
-            "merchant_id": "M1",
-            "client_id": vector["client_id"],
-            "client_secret": "secret",
-            "webhook_hash_key": "h",
-            "api_version": "v1rc",
-            "timeout_seconds": 30,
-            "base_url": vector["base_url"],
-        },
+        gateway_config("yoma_mmqr", client_id=vector["client_id"], base_url=vector["base_url"]),
         token_cache=cache,
         http_client=server.client(),
     ).renew_qr("ORDER_1")
@@ -304,10 +301,13 @@ def test_wave_money_request_overrides(mode: str, case: dict[str, Any]) -> None:
             WaveMoney,
             AsyncWaveMoney,
             WaveMoneyConfig(
-                merchant_id=config["merchant_id"],
-                secret_key=config["secret_key"],
-                merchant_name=config["merchant_name"],
-                time_to_live_seconds=config["time_to_live_in_seconds"],
+                **gateway_config(
+                    "wave_money",
+                    merchant_id=config["merchant_id"],
+                    secret_key=config["secret_key"],
+                    merchant_name=config["merchant_name"],
+                    time_to_live_seconds=config["time_to_live_in_seconds"],
+                )
             ),
             server,
         ).initiate(wave_override_data(case))
@@ -331,10 +331,8 @@ KBZ_TIME_TO_LIVE = VECTORS["kbz_pay_time_to_live"]
 
 @pytest.mark.parametrize("case", KBZ_TIME_TO_LIVE["cases"], ids=repr)
 def test_kbz_pay_time_to_live(mode: str, case: dict[str, Any]) -> None:
-    """The payment's time to live wins, then the configured one."""
-    env = without(CONFIG_ENV, KBZ_TIME_TO_LIVE["variable"])
-    if case["config"] is not None:
-        env[KBZ_TIME_TO_LIVE["variable"]] = case["config"]
+    """The payment's time to live wins over the configured one."""
+    env = {**CONFIG_ENV, KBZ_TIME_TO_LIVE["variable"]: case["config"]}
     server = FakeServer(
         {
             "Response": {
@@ -359,55 +357,3 @@ def test_kbz_pay_time_to_live(mode: str, case: dict[str, Any]) -> None:
     biz = server.last().json()["Request"]["biz_content"]
     assert biz["timeout_express"] == case["timeout_express"]
     assert payment.expires_at is not None
-
-
-def without(env: dict[str, str], variable: str) -> dict[str, str]:
-    return {key: value for key, value in env.items() if key != variable}
-
-
-def missing_env(variable: str, value: str | None) -> dict[str, str]:
-    env = without(CONFIG_ENV, variable)
-    if value is not None:
-        env[variable] = value
-    return env
-
-
-@pytest.mark.parametrize("value", KBZ_TIME_TO_LIVE["missing"]["configs"], ids=repr)
-def test_kbz_pay_requires_a_time_to_live(mode: str, value: str | None) -> None:
-    missing = KBZ_TIME_TO_LIVE["missing"]
-    server = FakeServer()
-    config = KbzPayConfig.from_env(missing_env(KBZ_TIME_TO_LIVE["variable"], value))
-    with pytest.raises(InvalidPaymentDataError) as info:
-        run(
-            make(mode, KbzPay, AsyncKbzPay, config, server).qr(
-                KbzPayPaymentData(
-                    order_id="ORDER_1", amount=1000, callback_url="https://shop.test/cb"
-                )
-            )
-        )
-    field = snake(missing["field"])
-    assert dict(info.value.errors) == {field: missing["message"].replace(missing["field"], field)}
-    assert server.requests == []
-
-
-WAVE_TIME_TO_LIVE_MISSING = VECTORS["wave_money_time_to_live_missing"]
-
-
-@pytest.mark.parametrize("value", WAVE_TIME_TO_LIVE_MISSING["configs"], ids=repr)
-def test_wave_money_requires_a_time_to_live(mode: str, value: str | None) -> None:
-    missing = WAVE_TIME_TO_LIVE_MISSING
-    server = FakeServer()
-    config = WaveMoneyConfig.from_env(missing_env(missing["variable"], value))
-    data = WaveMoneyPaymentData(
-        order_id="100",
-        callback_url="https://shop.test/cb",
-        return_url="https://shop.test/done",
-        description="Order 100",
-        items=[WaveMoneyItem("Shoes", 1000)],
-    )
-    with pytest.raises(InvalidPaymentDataError) as info:
-        run(make(mode, WaveMoney, AsyncWaveMoney, config, server).initiate(data))
-    field = snake(missing["field"])
-    assert dict(info.value.errors) == {field: missing["message"].replace(missing["field"], field)}
-    assert server.requests == []
-    assert data.merchant_reference_id is None or data.merchant_reference_id == ""

@@ -28,25 +28,35 @@ from python_myanmar_payments import (
     YomaMmqr,
     YomaMmqrConfig,
 )
+from tests.helpers import gateway_config
 
 ENV = {
     "KBZ_PAY_APP_ID": "kp1",
     "KBZ_PAY_APP_KEY": "k",
     "KBZ_PAY_MERCHANT_CODE": "m",
+    "KBZ_PAY_BASE_URL": "https://api.kbzpay.com/payment/gateway",
+    "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://wap.kbzpay.com/pgw/pwa/#/",
+    "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES": "15",
     "WAVE_MONEY_MERCHANT_ID": "w",
     "WAVE_MONEY_SECRET_KEY": "s",
     "WAVE_MONEY_MERCHANT_NAME": "Shop",
     "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS": "300",
+    "WAVE_MONEY_BASE_URL": "https://payments.wavemoney.io",
+    "WAVE_MONEY_BASE_REDIRECT_URL": "https://payments.wavemoney.io",
     "AYA_PAY_APP_KEY": "a",
     "AYA_PAY_APP_SECRET": "s",
+    "AYA_PAY_BASE_URL": "https://pgw.ayainnovation.com",
     "YOMA_MMQR_MERCHANT_ID": "y",
     "YOMA_MMQR_CLIENT_ID": "c",
     "YOMA_MMQR_CLIENT_SECRET": "s",
     "YOMA_MMQR_WEBHOOK_HASHKEY": "h",
     "YOMA_MMQR_API_VERSION": "v1rc",
+    "YOMA_MMQR_WEBHOOK_SECRET": "w",
+    "YOMA_MMQR_BASE_URL": "https://paymenthubapi.yomabank.com",
     "CYBER_SOURCE_PROFILE_ID": "p",
     "CYBER_SOURCE_ACCESS_KEY": "a",
     "CYBER_SOURCE_SECRET_KEY": "s",
+    "CYBER_SOURCE_BASE_URL": "https://secureacceptance.cybersource.com",
     "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "30",
 }
 
@@ -83,24 +93,11 @@ class TestMyanmarPayments:
         cache = MemoryTokenCache()
         client = httpx.Client()
         payments = MyanmarPayments(
-            kbz_pay=KbzPayConfig(app_id="a", app_key="b", merchant_code="c", timeout_seconds=30),
-            wave_money=WaveMoneyConfig(
-                merchant_id="m",
-                secret_key="s",
-                merchant_name="n",
-                time_to_live_seconds=300,
-                timeout_seconds=30,
-            ),
-            aya_pay=AyaPayConfig(app_key="k", app_secret="s", timeout_seconds=30),
-            yoma_mmqr=YomaMmqrConfig(
-                merchant_id="m",
-                client_id="c",
-                client_secret="s",
-                webhook_hash_key="h",
-                api_version="v1rc",
-                timeout_seconds=30,
-            ),
-            cyber_source=CyberSourceConfig(profile_id="p", access_key="a", secret_key="s"),
+            kbz_pay=KbzPayConfig(**gateway_config("kbz_pay", app_id="a")),
+            wave_money=WaveMoneyConfig(**gateway_config("wave_money")),
+            aya_pay=AyaPayConfig(**gateway_config("aya_pay")),
+            yoma_mmqr=YomaMmqrConfig(**gateway_config("yoma_mmqr")),
+            cyber_source=CyberSourceConfig(**gateway_config("cyber_source", profile_id="p")),
             token_cache=cache,
             http_client=client,
         )
@@ -113,27 +110,19 @@ class TestMyanmarPayments:
 
     def test_takes_mappings_of_config_arguments(self) -> None:
         payments = MyanmarPayments(
-            kbz_pay={"app_id": "a", "app_key": "b", "merchant_code": "c", "timeout_seconds": "30"},
-            wave_money={
-                "merchant_id": "m",
-                "secret_key": "s",
-                "merchant_name": "n",
-                "time_to_live_seconds": "300",
-                "timeout_seconds": 30,
-            },
-            aya_pay={"app_key": "k", "app_secret": "s", "timeout_seconds": 30},
-            yoma_mmqr={
-                "merchant_id": "m",
-                "client_id": "c",
-                "client_secret": "s",
-                "webhook_hash_key": "h",
-                "api_version": "v1rc",
-                "timeout_seconds": 30,
-            },
-            cyber_source={"profile_id": "p", "access_key": "a", "secret_key": "s"},
+            kbz_pay=gateway_config(
+                "kbz_pay", app_id="a", timeout_seconds="30", time_to_live_minutes="15"
+            ),
+            wave_money=gateway_config(
+                "wave_money", merchant_name="n", time_to_live_seconds="300", timeout_seconds=30
+            ),
+            aya_pay=gateway_config("aya_pay", app_key="k", timeout_seconds=30),
+            yoma_mmqr=gateway_config("yoma_mmqr", webhook_hash_key="h", timeout_seconds=30),
+            cyber_source=gateway_config("cyber_source", profile_id="p"),
         )
         assert payments.kbz_pay().config.app_id == "a"
         assert payments.kbz_pay().config.timeout_seconds == 30
+        assert payments.kbz_pay().config.time_to_live_minutes == 15
         assert payments.wave_money().config.merchant_name == "n"
         assert payments.aya_pay().config.app_key == "k"
         assert payments.yoma_mmqr().config.webhook_hash_key == "h"
@@ -146,12 +135,12 @@ class TestMyanmarPayments:
             MyanmarPayments(kbz_pay={"unknown": "x"}).kbz_pay()
 
     def test_gateways_take_a_mapping_of_config_arguments(self) -> None:
-        config = {"app_id": "a", "app_key": "b", "merchant_code": "c", "timeout_seconds": 30}
+        config = gateway_config("kbz_pay", merchant_code="c")
         for gateway in (KbzPay(config), AsyncKbzPay(config)):
             assert isinstance(gateway.config, KbzPayConfig)
             assert gateway.config.merchant_code == "c"
-        cyber_source = CyberSource({"profile_id": "p", "access_key": "a", "secret_key": "s"})
-        assert cyber_source.config.base_url == CyberSourceConfig.PRODUCTION_URL
+        cyber_source = CyberSource(gateway_config("cyber_source", base_url="https://cs.test/"))
+        assert cyber_source.config.base_url == "https://cs.test"
 
     @pytest.mark.parametrize(
         ("method", "gateway", "key"),
@@ -184,7 +173,7 @@ class TestAsyncMyanmarPayments:
                 assert payments.yoma_mmqr() is payments.yoma_mmqr()
                 assert isinstance(payments.cyber_source(), CyberSource)
             mapped = AsyncMyanmarPayments(
-                aya_pay={"app_key": "k", "app_secret": "s", "timeout_seconds": 30}
+                aya_pay=gateway_config("aya_pay", app_secret="s", timeout_seconds=30)
             )
             assert mapped.aya_pay().config.app_secret == "s"
             await mapped.aclose()

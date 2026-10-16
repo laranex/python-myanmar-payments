@@ -19,7 +19,6 @@ from ._support import (
     default_env,
     env_first,
     hmac_sha256_base64,
-    optional_setting,
     random_hex,
     require_setting,
     safe_equal,
@@ -40,9 +39,9 @@ __all__ = [
 class CyberSourceConfig:
     """A CyberSource Secure Acceptance profile.
 
-    Every setting except the URL override is required; a missing one raises a
-    :class:`~python_myanmar_payments.ConfigurationError`. The URL defaults to
-    production.
+    Every setting is required; a missing or blank one raises a
+    :class:`~python_myanmar_payments.ConfigurationError`. :attr:`PRODUCTION_URL`
+    names production's base URL.
     """
 
     PRODUCTION_URL: ClassVar[str] = "https://secureacceptance.cybersource.com"
@@ -54,7 +53,8 @@ class CyberSourceConfig:
     secret_key: str
     """The profile's secret key, which signs the fields."""
     base_url: str
-    """The base URL in use."""
+    """The Secure Acceptance base URL, e.g. :attr:`PRODUCTION_URL` or
+    ``https://testsecureacceptance.cybersource.com``."""
 
     def __init__(
         self,
@@ -62,12 +62,12 @@ class CyberSourceConfig:
         profile_id: str = "",
         access_key: str = "",
         secret_key: str = "",
-        base_url: str | None = None,
+        base_url: str = "",
     ) -> None:
         self.profile_id = require_setting("cyber_source", "profile_id", profile_id)
         self.access_key = require_setting("cyber_source", "access_key", access_key)
         self.secret_key = require_setting("cyber_source", "secret_key", secret_key)
-        self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
+        self.base_url = trim_url(require_setting("cyber_source", "base_url", base_url))
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> CyberSourceConfig:

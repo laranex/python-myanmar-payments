@@ -36,7 +36,6 @@ from ._support import (
     default_env,
     env_first,
     hmac_sha256_hex,
-    optional_setting,
     read_timeout,
     require_setting,
     safe_equal,
@@ -58,11 +57,10 @@ __all__ = [
 class YomaMmqrConfig:
     """Yoma MMQR credentials and endpoints.
 
-    Every setting except the webhook secret, the HTTP timeout and the URL override
-    is required; a missing one raises a
-    :class:`~python_myanmar_payments.ConfigurationError`. The timeout defaults to
-    :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS` and the URL to
-    production.
+    Every setting except the HTTP timeout is required; a missing or blank one
+    raises a :class:`~python_myanmar_payments.ConfigurationError`. The timeout
+    defaults to :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS`.
+    :attr:`PRODUCTION_URL` names production's API base URL.
     """
 
     PRODUCTION_URL: ClassVar[str] = "https://paymenthubapi.yomabank.com"
@@ -79,11 +77,11 @@ class YomaMmqrConfig:
     """The ``{version}`` segment of the API paths, e.g. ``v1rc``."""
     timeout_seconds: int
     """Seconds before the default HTTP client gives up on a request (default 30)."""
-    webhook_secret: str | None
-    """The secret you shared with Yoma; when set, callbacks must carry it in
+    webhook_secret: str
+    """The secret you shared with Yoma; every callback must carry it in
     ``X-Webhook-Secret``."""
     base_url: str
-    """The base URL in use."""
+    """The API base URL, e.g. :attr:`PRODUCTION_URL` or ``https://devapi.yomabank.net``."""
 
     def __init__(
         self,
@@ -94,8 +92,8 @@ class YomaMmqrConfig:
         webhook_hash_key: str = "",
         api_version: str = "",
         timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
-        webhook_secret: str | None = None,
-        base_url: str | None = None,
+        webhook_secret: str = "",
+        base_url: str = "",
     ) -> None:
         self.merchant_id = require_setting("yoma_mmqr", "merchant_id", merchant_id)
         self.client_id = require_setting("yoma_mmqr", "client_id", client_id)
@@ -103,8 +101,8 @@ class YomaMmqrConfig:
         self.webhook_hash_key = require_setting("yoma_mmqr", "webhook_hashkey", webhook_hash_key)
         self.api_version = require_setting("yoma_mmqr", "api_version", api_version)
         self.timeout_seconds = read_timeout("yoma_mmqr", timeout_seconds)
-        self.webhook_secret = optional_setting(webhook_secret)
-        self.base_url = trim_url(optional_setting(base_url) or self.PRODUCTION_URL)
+        self.webhook_secret = require_setting("yoma_mmqr", "webhook_secret", webhook_secret)
+        self.base_url = trim_url(require_setting("yoma_mmqr", "base_url", base_url))
 
     @classmethod
     def from_env(cls, env: EnvSource | None = None) -> YomaMmqrConfig:
@@ -112,8 +110,8 @@ class YomaMmqrConfig:
 
         ``YOMA_MMQR_MERCHANT_ID``, ``YOMA_MMQR_CLIENT_ID``,
         ``YOMA_MMQR_CLIENT_SECRET``, ``YOMA_MMQR_WEBHOOK_HASHKEY``,
-        ``YOMA_MMQR_API_VERSION``, ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``,
-        ``YOMA_MMQR_WEBHOOK_SECRET`` and ``YOMA_MMQR_BASE_URL``. Defaults to
+        ``YOMA_MMQR_API_VERSION``, ``YOMA_MMQR_WEBHOOK_SECRET``,
+        ``YOMA_MMQR_BASE_URL`` and ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``. Defaults to
         ``os.environ``.
         """
         env = default_env() if env is None else env
@@ -211,9 +209,7 @@ class _YomaMmqrBase:
         """
         payload = lossless_body(request)
 
-        if self.config.webhook_secret is not None and not safe_equal(
-            self.config.webhook_secret, request.header("X-Webhook-Secret") or ""
-        ):
+        if not safe_equal(self.config.webhook_secret, request.header("X-Webhook-Secret") or ""):
             raise SignatureVerificationError(
                 "Yoma MMQR callback has a missing or wrong X-Webhook-Secret header.",
                 to_plain_object(payload),

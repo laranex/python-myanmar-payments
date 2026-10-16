@@ -15,7 +15,6 @@ from ._callback import CallbackRequest, lossless_body
 from ._errors import (
     ApiError,
     ConfigurationError,
-    InvalidPaymentDataError,
     SignatureVerificationError,
 )
 from ._http import (
@@ -41,11 +40,10 @@ from ._support import (
     config_of,
     default_env,
     env_first,
-    optional_integer,
-    optional_setting,
     query_escape,
     random_hex,
     read_timeout,
+    require_integer,
     require_setting,
     safe_equal,
     sha256_hex,
@@ -68,11 +66,11 @@ __all__ = [
 class KbzPayConfig:
     """KBZ Pay credentials and endpoints.
 
-    Every setting except the HTTP timeout, the time to live and the URL overrides
-    is required; a missing one raises a
-    :class:`~python_myanmar_payments.ConfigurationError`. The timeout defaults to
-    :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS` and the URLs to
-    production.
+    Every setting except the HTTP timeout is required; a missing or blank one
+    raises a :class:`~python_myanmar_payments.ConfigurationError`. The timeout
+    defaults to :data:`~python_myanmar_payments.DEFAULT_TIMEOUT_SECONDS`. UAT and
+    production issue separate credentials and use separate URLs
+    (:attr:`PRODUCTION_API_URL` and :attr:`PRODUCTION_PWA_URL` name production's).
     """
 
     PRODUCTION_API_URL: ClassVar[str] = "https://api.kbzpay.com/payment/gateway"
@@ -89,13 +87,14 @@ class KbzPayConfig:
     timeout_seconds: int
     """Seconds before the default HTTP client gives up on a request (default 30)."""
     api_url: str
-    """The API base URL in use."""
+    """The API base URL, e.g. :attr:`PRODUCTION_API_URL` or
+    ``http://api-uat.kbzpay.com/payment/gateway/uat``."""
     pwa_url: str
-    """The PWA checkout URL in use, always ending in ``/``."""
-    time_to_live_minutes: int | None
+    """The PWA checkout URL, always ending in ``/``, e.g. :attr:`PRODUCTION_PWA_URL`
+    or ``https://static.kbzpay.com/pgw/uat/pwa/#/``."""
+    time_to_live_minutes: int
     """Minutes the customer has to pay each order, 1 to 120. A payment's own
-    ``time_to_live_minutes`` overrides it; with neither set, ``pwa()``, ``qr()``
-    and ``app()`` raise :class:`~python_myanmar_payments.InvalidPaymentDataError`."""
+    ``time_to_live_minutes`` overrides it."""
 
     def __init__(
         self,
@@ -104,23 +103,23 @@ class KbzPayConfig:
         app_key: str = "",
         merchant_code: str = "",
         timeout_seconds: int | str | None = DEFAULT_TIMEOUT_SECONDS,
-        api_url: str | None = None,
-        pwa_url: str | None = None,
+        api_url: str = "",
+        pwa_url: str = "",
         time_to_live_minutes: int | str | None = None,
     ) -> None:
         self.app_id = require_setting("kbz_pay", "app_id", app_id)
         self.app_key = require_setting("kbz_pay", "app_key", app_key)
         self.merchant_code = require_setting("kbz_pay", "merchant_code", merchant_code)
         self.timeout_seconds = read_timeout("kbz_pay", timeout_seconds)
-        self.api_url = trim_url(optional_setting(api_url) or self.PRODUCTION_API_URL)
-        self.pwa_url = trim_url(optional_setting(pwa_url) or self.PRODUCTION_PWA_URL) + "/"
-        ttl = optional_integer(
+        self.api_url = trim_url(require_setting("kbz_pay", "api_url", api_url))
+        self.pwa_url = trim_url(require_setting("kbz_pay", "pwa_url", pwa_url)) + "/"
+        ttl = require_integer(
             "kbz_pay",
             "time_to_live_in_minutes",
             time_to_live_minutes,
             self.TIME_TO_LIVE_REQUIREMENT,
         )
-        if ttl is not None and not 1 <= ttl <= 120:
+        if not 1 <= ttl <= 120:
             raise ConfigurationError(
                 "kbz_pay",
                 "time_to_live_in_minutes",
@@ -173,8 +172,7 @@ class KbzPayPaymentData:
     """The product name shown to the customer."""
     time_to_live_minutes: int | None = None
     """Minutes the customer has to pay before the order expires, 1 to 120.
-    Overrides :attr:`KbzPayConfig.time_to_live_minutes`; one of the two is
-    required."""
+    Overrides :attr:`KbzPayConfig.time_to_live_minutes` for this payment."""
     callback_info: str | None = None
     """Free text KBZ sends back unchanged in the callback, at most 512 characters
     once URL-encoded."""
@@ -435,21 +433,10 @@ class _KbzPayBase:
         )
 
     def _time_to_live(self, data: KbzPayPaymentData) -> int:
-        """The payment's time to live in minutes, else the configured one.
-
-        Raises an :class:`~python_myanmar_payments.InvalidPaymentDataError` when
-        neither is set.
-        """
+        """The payment's time to live in minutes, else the configured one."""
         if data.time_to_live_minutes is not None:
             return data.time_to_live_minutes
-        if self.config.time_to_live_minutes is not None:
-            return self.config.time_to_live_minutes
-        raise InvalidPaymentDataError(
-            {
-                "time_to_live_minutes": "The time_to_live_minutes field is required when "
-                "the kbz_pay configuration has no [time_to_live_in_minutes]."
-            }
-        )
+        return self.config.time_to_live_minutes
 
     def _qr_payment(self, data: KbzPayPaymentData, order: _Order) -> QrPayment:
         qr_code = get(order.response, "qrCode")

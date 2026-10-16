@@ -21,16 +21,14 @@ from python_myanmar_payments import (
     WaveMoneyItem,
     WaveMoneyPaymentData,
 )
-from tests.helpers import FakeServer, fixture, hmac_hex, make, run
+from tests.helpers import FakeServer, fixture, gateway_config, hmac_hex, make, run
 
-CONFIG: dict[str, Any] = {
-    "merchant_id": "testmerchantID",
-    "secret_key": "test-secret",
-    "merchant_name": "Shop",
-    "time_to_live_seconds": 300,
-    "timeout_seconds": 30,
-    "base_url": "https://wave.test",
-}
+CONFIG: dict[str, Any] = gateway_config(
+    "wave_money",
+    timeout_seconds=30,
+    base_url="https://wave.test",
+    base_redirect_url="https://pay.wave.test/",
+)
 
 SUCCESS = {"message": "success", "transaction_id": "TX 1"}
 
@@ -55,7 +53,7 @@ def form(server: FakeServer) -> dict[str, str]:
 
 
 class TestWaveMoney:
-    def test_posts_a_hashed_form_and_returns_the_authenticate_url(self, mode: str) -> None:
+    def test_posts_to_the_base_url_and_redirects_to_the_base_redirect_url(self, mode: str) -> None:
         server = FakeServer(SUCCESS)
         payment_data = data(merchant_reference_id="ref-001")
         payment = run(gateway(mode, server).initiate(payment_data))
@@ -79,7 +77,7 @@ class TestWaveMoney:
             ),
         }
         assert payment.flow == "redirect"
-        assert payment.url == "https://wave.test/authenticate?transaction_id=TX+1"
+        assert payment.url == "https://pay.wave.test/authenticate?transaction_id=TX+1"
         assert payment.gateway_reference == "TX 1"
         assert payment.raw == SUCCESS
 
@@ -326,13 +324,32 @@ class TestWaveMoney:
         assert callback.order_id == "ORDER_1-a"
 
 
+ENV = {
+    "WAVE_MONEY_MERCHANT_ID": "m",
+    "WAVE_MONEY_SECRET_KEY": "s",
+    "WAVE_MONEY_MERCHANT_NAME": "My Shop",
+    "WAVE_MONEY_BASE_URL": "https://api.wave.test/",
+    "WAVE_MONEY_BASE_REDIRECT_URL": "https://pay.wave.test/",
+    "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS": " 600 ",
+    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "20",
+}
+
+
 class TestWaveMoneyConfig:
-    def test_defaults_to_the_production_hosts(self) -> None:
-        config = WaveMoneyConfig(**{**CONFIG, "base_url": None})
+    def test_uses_the_configured_hosts(self) -> None:
+        config = WaveMoneyConfig(
+            **{
+                **CONFIG,
+                "base_url": WaveMoneyConfig.PRODUCTION_URL,
+                "base_redirect_url": WaveMoneyConfig.PRODUCTION_URL,
+            }
+        )
         assert config.base_url == "https://payments.wavemoney.io"
+        assert config.base_redirect_url == "https://payments.wavemoney.io"
         assert config.time_to_live_seconds == 300
         assert config.timeout_seconds == 30
         assert repr(config) == "WaveMoneyConfig(merchant_id='testmerchantID')"
+        assert WaveMoneyConfig(**CONFIG).base_redirect_url == "https://pay.wave.test"
 
     @pytest.mark.parametrize(("ttl", "expected"), [(60, 60), ("600", 600), (" +5 ", 5)])
     def test_reads_a_whole_number_time_to_live(self, ttl: Any, expected: int) -> None:
@@ -348,26 +365,46 @@ class TestWaveMoneyConfig:
             " greater than 0."
         )
 
-    @pytest.mark.parametrize("ttl", [None, "", "   "])
-    def test_takes_an_optional_time_to_live(self, ttl: Any) -> None:
-        assert (
-            WaveMoneyConfig(**{**CONFIG, "time_to_live_seconds": ttl}).time_to_live_seconds is None
-        )
+    @pytest.mark.parametrize(
+        ("key", "name"),
+        [
+            ("base_url", "base_url"),
+            ("base_redirect_url", "base_redirect_url"),
+            ("time_to_live_seconds", "time_to_live_in_seconds"),
+        ],
+    )
+    @pytest.mark.parametrize("blank", [None, "", "   "])
+    def test_requires_the_urls_and_the_time_to_live(self, key: str, name: str, blank: Any) -> None:
+        with pytest.raises(ConfigurationError) as info:
+            WaveMoneyConfig(**{**CONFIG, key: blank})
+        assert info.value.gateway == "wave_money"
+        assert info.value.key == name
+        assert str(info.value) == f"The wave_money configuration is missing [{name}]."
+        with pytest.raises(ConfigurationError, match=rf"missing \[{name}\]"):
+            WaveMoneyConfig(**{k: v for k, v in CONFIG.items() if k != key})
+
+    @pytest.mark.parametrize(
+        ("variable", "key"),
+        [
+            ("WAVE_MONEY_BASE_URL", "base_url"),
+            ("WAVE_MONEY_BASE_REDIRECT_URL", "base_redirect_url"),
+            ("WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS", "time_to_live_in_seconds"),
+        ],
+    )
+    def test_requires_each_setting_in_the_environment(self, variable: str, key: str) -> None:
+        for env in ({k: v for k, v in ENV.items() if k != variable}, {**ENV, variable: "  "}):
+            with pytest.raises(ConfigurationError) as info:
+                WaveMoneyConfig.from_env(env)
+            assert str(info.value) == f"The wave_money configuration is missing [{key}]."
 
     def test_reads_the_environment(self, mode: str) -> None:
-        env = {
-            "WAVE_MONEY_MERCHANT_ID": "m",
-            "WAVE_MONEY_SECRET_KEY": "s",
-            "WAVE_MONEY_MERCHANT_NAME": "My Shop",
-            "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS": " 600 ",
-            "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "20",
-            "WAVE_MONEY_BASE_URL": "https://api.wave.test/",
-        }
+        env = ENV
         config = WaveMoneyConfig.from_env(env)
         assert config.merchant_name == "My Shop"
         assert config.time_to_live_seconds == 600
         assert config.timeout_seconds == 20
         assert config.base_url == "https://api.wave.test"
+        assert config.base_redirect_url == "https://pay.wave.test"
         env_with_name = {**env, "WAVE_MONEY_MERCHANT_NAME": "Wave Shop"}
         cls = WaveMoney if mode == "sync" else AsyncWaveMoney
         assert cls.from_env(env_with_name).config.merchant_name == "Wave Shop"

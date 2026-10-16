@@ -24,17 +24,12 @@ from python_myanmar_payments import (
     YomaMmqrPaymentData,
 )
 from tests.conftest import Clock
-from tests.helpers import NOW, FakeServer, hmac_hex, make, run
+from tests.helpers import NOW, FakeServer, gateway_config, hmac_hex, make, run
 
-CONFIG: dict[str, Any] = {
-    "merchant_id": "M1",
-    "client_id": "client",
-    "client_secret": "secret",
-    "webhook_hash_key": "hash-key",
-    "api_version": "v1rc",
-    "timeout_seconds": 30,
-    "base_url": "https://yoma.test",
-}
+CONFIG: dict[str, Any] = gateway_config(
+    "yoma_mmqr", merchant_id="M1", timeout_seconds=30, base_url="https://yoma.test"
+)
+WEBHOOK_SECRET = {"X-Webhook-Secret": "webhook-secret"}
 API = "https://yoma.test/payment-gateway/v1rc/api"
 TOKEN = {"access_token": "TOKEN", "expires_in": 3600}
 QR = {"qrString": "iVBORw0KGgo=", "refLabel": "REF1"}
@@ -42,6 +37,11 @@ QR = {"qrString": "iVBORw0KGgo=", "refLabel": "REF1"}
 
 def gateway(mode: str, server: FakeServer | None = None, **options: Any) -> Any:
     return make(mode, YomaMmqr, AsyncYomaMmqr, YomaMmqrConfig(**CONFIG), server, **options)
+
+
+def callback_request(body: dict[str, Any]) -> CallbackRequest:
+    """A callback carrying the configured ``X-Webhook-Secret``."""
+    return CallbackRequest.from_json(body, WEBHOOK_SECRET)
 
 
 def data(**changes: Any) -> YomaMmqrPaymentData:
@@ -277,7 +277,7 @@ class TestYomaMmqr:
         assert tokens == 1
 
     def test_verifies_a_callback(self, mode: str) -> None:
-        callback = gateway(mode).handle_callback(CallbackRequest.from_json(callback_body()))
+        callback = gateway(mode).handle_callback(callback_request(callback_body()))
         assert callback.is_successful()
         assert callback.order_id == "ORDER_1"
         assert callback.gateway_status == "SUCCESS"
@@ -288,7 +288,7 @@ class TestYomaMmqr:
         body = callback_body(status="failed")
         body["status"] = " failed "
         body["hashValue"] = body["hashValue"].upper()
-        callback = gateway("sync").handle_callback(CallbackRequest.from_json(body))
+        callback = gateway("sync").handle_callback(callback_request(body))
         assert callback.status is PaymentStatus.FAILED
         assert callback.gateway_status == "failed"
 
@@ -296,16 +296,20 @@ class TestYomaMmqr:
         tampered = {**callback_body(), "status": "FAILED"}
         for body in (tampered, callback_body(order=""), {}):
             with pytest.raises(SignatureVerificationError, match="hash verification failed"):
-                gateway("sync").handle_callback(CallbackRequest.from_json(body))
+                gateway("sync").handle_callback(callback_request(body))
 
-    def test_checks_the_webhook_secret_header(self) -> None:
-        yoma = YomaMmqr(YomaMmqrConfig(**CONFIG, webhook_secret="shared"))
-        good = CallbackRequest.from_json(callback_body(), {"X-Webhook-Secret": "shared"})
+    def test_always_checks_the_webhook_secret_header(self, mode: str) -> None:
+        yoma = gateway(mode)
+        good = CallbackRequest.from_json(callback_body(), {"x-webhook-secret": "webhook-secret"})
         assert yoma.handle_callback(good).order_id == "ORDER_1"
-        for headers in ({"X-Webhook-Secret": "wrong"}, None):
+        for headers in ({"X-Webhook-Secret": "wrong"}, {"X-Webhook-Secret": ""}, None):
             request = CallbackRequest.from_json(callback_body(), headers)
-            with pytest.raises(SignatureVerificationError, match="X-Webhook-Secret"):
+            with pytest.raises(SignatureVerificationError) as info:
                 yoma.handle_callback(request)
+            assert str(info.value) == (
+                "Yoma MMQR callback has a missing or wrong X-Webhook-Secret header."
+            )
+            assert info.value.raw["orderNumber"] == "ORDER_1"
 
     @pytest.mark.parametrize(
         ("change", "field"),
@@ -324,14 +328,25 @@ class TestYomaMmqr:
         assert info.value.errors[field]
 
 
+ENV = {
+    "YOMA_MMQR_MERCHANT_ID": "M1",
+    "YOMA_MMQR_CLIENT_ID": "c",
+    "YOMA_MMQR_CLIENT_SECRET": "s",
+    "YOMA_MMQR_WEBHOOK_HASHKEY": "h",
+    "YOMA_MMQR_API_VERSION": "v1",
+    "YOMA_MMQR_WEBHOOK_SECRET": "w",
+    "YOMA_MMQR_BASE_URL": "https://y.test/",
+    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "30",
+}
+
+
 class TestYomaMmqrConfig:
-    def test_defaults_to_the_production_endpoint(self) -> None:
-        values = {key: value for key, value in CONFIG.items() if key != "base_url"}
-        config = YomaMmqrConfig(**values)
-        assert config.base_url == YomaMmqrConfig.PRODUCTION_URL
+    def test_uses_the_configured_endpoint(self) -> None:
+        config = YomaMmqrConfig(**{**CONFIG, "base_url": YomaMmqrConfig.PRODUCTION_URL})
+        assert config.base_url == "https://paymenthubapi.yomabank.com"
         assert config.api_version == "v1rc"
         assert config.timeout_seconds == 30
-        assert config.webhook_secret is None
+        assert config.webhook_secret == "webhook-secret"
         assert repr(config) == "YomaMmqrConfig(merchant_id='M1')"
 
     def test_requires_the_api_version(self) -> None:
@@ -339,17 +354,29 @@ class TestYomaMmqrConfig:
             YomaMmqrConfig(**{**CONFIG, "api_version": " "})
         assert str(info.value) == "The yoma_mmqr configuration is missing [api_version]."
 
+    @pytest.mark.parametrize("key", ["webhook_secret", "base_url"])
+    @pytest.mark.parametrize("blank", [None, "", "   "])
+    def test_requires_the_webhook_secret_and_the_base_url(self, key: str, blank: Any) -> None:
+        with pytest.raises(ConfigurationError) as info:
+            YomaMmqrConfig(**{**CONFIG, key: blank})
+        assert info.value.gateway == "yoma_mmqr"
+        assert info.value.key == key
+        assert str(info.value) == f"The yoma_mmqr configuration is missing [{key}]."
+        with pytest.raises(ConfigurationError, match=rf"missing \[{key}\]"):
+            YomaMmqrConfig(**{k: v for k, v in CONFIG.items() if k != key})
+
+    @pytest.mark.parametrize(
+        ("variable", "key"),
+        [("YOMA_MMQR_WEBHOOK_SECRET", "webhook_secret"), ("YOMA_MMQR_BASE_URL", "base_url")],
+    )
+    def test_requires_each_setting_in_the_environment(self, variable: str, key: str) -> None:
+        for env in ({k: v for k, v in ENV.items() if k != variable}, {**ENV, variable: "  "}):
+            with pytest.raises(ConfigurationError) as info:
+                YomaMmqrConfig.from_env(env)
+            assert str(info.value) == f"The yoma_mmqr configuration is missing [{key}]."
+
     def test_reads_the_environment(self, mode: str) -> None:
-        env = {
-            "YOMA_MMQR_MERCHANT_ID": "M1",
-            "YOMA_MMQR_CLIENT_ID": "c",
-            "YOMA_MMQR_CLIENT_SECRET": "s",
-            "YOMA_MMQR_WEBHOOK_HASHKEY": "h",
-            "YOMA_MMQR_WEBHOOK_SECRET": "w",
-            "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "30",
-            "YOMA_MMQR_BASE_URL": "https://y.test/",
-            "YOMA_MMQR_API_VERSION": "v1",
-        }
+        env = ENV
         config = YomaMmqrConfig.from_env(env)
         assert config.webhook_hash_key == "h"
         assert config.webhook_secret == "w"

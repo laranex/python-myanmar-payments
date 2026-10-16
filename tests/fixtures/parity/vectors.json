@@ -5,6 +5,7 @@
         "wave_money_secret_key": "test-secret",
         "aya_pay_app_secret": "test-secret",
         "yoma_mmqr_webhook_hashkey": "test-hashkey",
+        "yoma_mmqr_webhook_secret": "test-webhook-secret",
         "cyber_source_secret_key": "test-secret"
     },
     "callbacks": {
@@ -230,6 +231,9 @@
             {
                 "name": "a numeric order number hashes as its exact text",
                 "content_type": "application/json",
+                "headers": {
+                    "X-Webhook-Secret": "test-webhook-secret"
+                },
                 "body": "{\"orderNumber\":12345,\"status\":\"SUCCESS\",\"hashValue\":\"a4985cb50866542d42675128ae92fee627643d55dd966fea6773cc66842d65e6\"}",
                 "expected": {
                     "valid": true,
@@ -241,6 +245,9 @@
             {
                 "name": "booleans hash as true and false",
                 "content_type": "application/json",
+                "headers": {
+                    "X-Webhook-Secret": "test-webhook-secret"
+                },
                 "body": "{\"orderNumber\":\"ORDER_1\",\"status\":true,\"hashValue\":\"628800464e075b27d6e3d0f9c39688cb0cbb15ab0c36911e55a3942c3e0b56e9\"}",
                 "expected": {
                     "valid": true,
@@ -252,6 +259,9 @@
             {
                 "name": "a nested status is rejected",
                 "content_type": "application/json",
+                "headers": {
+                    "X-Webhook-Secret": "test-webhook-secret"
+                },
                 "body": "{\"orderNumber\":\"ORDER_1\",\"status\":{\"code\":\"SUCCESS\"},\"hashValue\":\"05a1f216fd163fda83bbbc18e7cd6e0ce7662d10aface9c17e066ecdfa01b6db\"}",
                 "expected": {
                     "valid": false
@@ -260,12 +270,35 @@
             {
                 "name": "a lowercase status maps case-insensitively",
                 "content_type": "application/json",
+                "headers": {
+                    "X-Webhook-Secret": "test-webhook-secret"
+                },
                 "body": "{\"orderNumber\":\"ORDER_1\",\"status\":\"success\",\"hashValue\":\"FC69235A82B7EC767D2B4236D475FA02EDC421B19A8B78A0A2D1B8CED586C1F0\"}",
                 "expected": {
                     "valid": true,
                     "order_id": "ORDER_1",
                     "status": "successful",
                     "gateway_status": "success"
+                }
+            },
+            {
+                "name": "a valid hash without the webhook secret header is rejected",
+                "content_type": "application/json",
+                "headers": {},
+                "body": "{\"orderNumber\":12345,\"status\":\"SUCCESS\",\"hashValue\":\"a4985cb50866542d42675128ae92fee627643d55dd966fea6773cc66842d65e6\"}",
+                "expected": {
+                    "valid": false
+                }
+            },
+            {
+                "name": "a wrong webhook secret header is rejected",
+                "content_type": "application/json",
+                "headers": {
+                    "X-Webhook-Secret": "wrong-secret"
+                },
+                "body": "{\"orderNumber\":12345,\"status\":\"SUCCESS\",\"hashValue\":\"a4985cb50866542d42675128ae92fee627643d55dd966fea6773cc66842d65e6\"}",
+                "expected": {
+                    "valid": false
                 }
             }
         ],
@@ -489,20 +522,29 @@
             "KBZ_PAY_APP_ID": "kp123",
             "KBZ_PAY_APP_KEY": "test-key",
             "KBZ_PAY_MERCHANT_CODE": "100001",
+            "KBZ_PAY_BASE_URL": "https://api.kbzpay.com/payment/gateway",
+            "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://wap.kbzpay.com/pgw/pwa/#/",
+            "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES": "15",
             "WAVE_MONEY_MERCHANT_ID": "merchant",
             "WAVE_MONEY_SECRET_KEY": "test-secret",
             "WAVE_MONEY_MERCHANT_NAME": "Shop",
             "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS": "300",
+            "WAVE_MONEY_BASE_URL": "https://payments.wavemoney.io",
+            "WAVE_MONEY_BASE_REDIRECT_URL": "https://payments.wavemoney.io",
             "AYA_PAY_APP_KEY": "app-key",
             "AYA_PAY_APP_SECRET": "test-secret",
+            "AYA_PAY_BASE_URL": "https://pgw.ayainnovation.com",
             "YOMA_MMQR_MERCHANT_ID": "M001",
             "YOMA_MMQR_CLIENT_ID": "client",
             "YOMA_MMQR_CLIENT_SECRET": "secret",
             "YOMA_MMQR_WEBHOOK_HASHKEY": "test-hashkey",
             "YOMA_MMQR_API_VERSION": "v1rc",
+            "YOMA_MMQR_WEBHOOK_SECRET": "test-webhook-secret",
+            "YOMA_MMQR_BASE_URL": "https://paymenthubapi.yomabank.com",
             "CYBER_SOURCE_PROFILE_ID": "profile",
             "CYBER_SOURCE_ACCESS_KEY": "access",
             "CYBER_SOURCE_SECRET_KEY": "test-secret",
+            "CYBER_SOURCE_BASE_URL": "https://secureacceptance.cybersource.com",
             "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "45"
         },
         "seconds": {
@@ -515,7 +557,8 @@
                 "pwa_url": "https://wap.kbzpay.com/pgw/pwa/#/"
             },
             "wave_money": {
-                "base_url": "https://payments.wavemoney.io"
+                "base_url": "https://payments.wavemoney.io",
+                "base_redirect_url": "https://payments.wavemoney.io"
             },
             "aya_pay": {
                 "base_url": "https://pgw.ayainnovation.com"
@@ -532,6 +575,7 @@
                 "KBZ_PAY_BASE_URL": "http://api-uat.kbzpay.com/payment/gateway/uat",
                 "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://static.kbzpay.com/pgw/uat/pwa/#/",
                 "WAVE_MONEY_BASE_URL": "https://preprodpayments.wavemoney.io:8107",
+                "WAVE_MONEY_BASE_REDIRECT_URL": "https://preprodpayments.wavemoney.io",
                 "AYA_PAY_BASE_URL": "https://uat-pgw.ayainnovation.com",
                 "YOMA_MMQR_BASE_URL": "https://devapi.yomabank.net",
                 "CYBER_SOURCE_BASE_URL": "https://testsecureacceptance.cybersource.com"
@@ -542,7 +586,8 @@
                     "pwa_url": "https://static.kbzpay.com/pgw/uat/pwa/#/"
                 },
                 "wave_money": {
-                    "base_url": "https://preprodpayments.wavemoney.io:8107"
+                    "base_url": "https://preprodpayments.wavemoney.io:8107",
+                    "base_redirect_url": "https://preprodpayments.wavemoney.io"
                 },
                 "aya_pay": {
                     "base_url": "https://uat-pgw.ayainnovation.com"
@@ -781,6 +826,20 @@
                 "message": "The cyber_source configuration is missing [secret_key]."
             },
             {
+                "gateway": "cyber_source",
+                "variable": "CYBER_SOURCE_BASE_URL",
+                "value": null,
+                "key": "base_url",
+                "message": "The cyber_source configuration is missing [base_url]."
+            },
+            {
+                "gateway": "cyber_source",
+                "variable": "CYBER_SOURCE_BASE_URL",
+                "value": "   ",
+                "key": "base_url",
+                "message": "The cyber_source configuration is missing [base_url]."
+            },
+            {
                 "gateway": "wave_money",
                 "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
                 "value": "0",
@@ -872,11 +931,95 @@
                 "message": "The kbz_pay configuration [time_to_live_in_minutes] must be a whole number from 1 to 120."
             },
             {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_BASE_URL",
+                "value": null,
+                "key": "api_url",
+                "message": "The kbz_pay configuration is missing [api_url]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_BASE_URL",
+                "value": "   ",
+                "key": "api_url",
+                "message": "The kbz_pay configuration is missing [api_url]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_PWA_BASE_REDIRECT_URL",
+                "value": null,
+                "key": "pwa_url",
+                "message": "The kbz_pay configuration is missing [pwa_url]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_PWA_BASE_REDIRECT_URL",
+                "value": "   ",
+                "key": "pwa_url",
+                "message": "The kbz_pay configuration is missing [pwa_url]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES",
+                "value": null,
+                "key": "time_to_live_in_minutes",
+                "message": "The kbz_pay configuration is missing [time_to_live_in_minutes]."
+            },
+            {
+                "gateway": "kbz_pay",
+                "variable": "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES",
+                "value": "   ",
+                "key": "time_to_live_in_minutes",
+                "message": "The kbz_pay configuration is missing [time_to_live_in_minutes]."
+            },
+            {
                 "gateway": "wave_money",
                 "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
                 "value": "0",
                 "key": "timeout_in_seconds",
                 "message": "The wave_money configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_BASE_URL",
+                "value": null,
+                "key": "base_url",
+                "message": "The wave_money configuration is missing [base_url]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_BASE_URL",
+                "value": "   ",
+                "key": "base_url",
+                "message": "The wave_money configuration is missing [base_url]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_BASE_REDIRECT_URL",
+                "value": null,
+                "key": "base_redirect_url",
+                "message": "The wave_money configuration is missing [base_redirect_url]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_BASE_REDIRECT_URL",
+                "value": "   ",
+                "key": "base_redirect_url",
+                "message": "The wave_money configuration is missing [base_redirect_url]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "value": null,
+                "key": "time_to_live_in_seconds",
+                "message": "The wave_money configuration is missing [time_to_live_in_seconds]."
+            },
+            {
+                "gateway": "wave_money",
+                "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
+                "value": "   ",
+                "key": "time_to_live_in_seconds",
+                "message": "The wave_money configuration is missing [time_to_live_in_seconds]."
             },
             {
                 "gateway": "aya_pay",
@@ -886,11 +1029,53 @@
                 "message": "The aya_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
             },
             {
+                "gateway": "aya_pay",
+                "variable": "AYA_PAY_BASE_URL",
+                "value": null,
+                "key": "base_url",
+                "message": "The aya_pay configuration is missing [base_url]."
+            },
+            {
+                "gateway": "aya_pay",
+                "variable": "AYA_PAY_BASE_URL",
+                "value": "   ",
+                "key": "base_url",
+                "message": "The aya_pay configuration is missing [base_url]."
+            },
+            {
                 "gateway": "yoma_mmqr",
                 "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
                 "value": "0",
                 "key": "timeout_in_seconds",
                 "message": "The yoma_mmqr configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_WEBHOOK_SECRET",
+                "value": null,
+                "key": "webhook_secret",
+                "message": "The yoma_mmqr configuration is missing [webhook_secret]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_WEBHOOK_SECRET",
+                "value": "   ",
+                "key": "webhook_secret",
+                "message": "The yoma_mmqr configuration is missing [webhook_secret]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_BASE_URL",
+                "value": null,
+                "key": "base_url",
+                "message": "The yoma_mmqr configuration is missing [base_url]."
+            },
+            {
+                "gateway": "yoma_mmqr",
+                "variable": "YOMA_MMQR_BASE_URL",
+                "value": "   ",
+                "key": "base_url",
+                "message": "The yoma_mmqr configuration is missing [base_url]."
             }
         ],
         "default_timeout": {
@@ -972,29 +1157,7 @@
                 "config": "30",
                 "payment": 10,
                 "timeout_express": "10m"
-            },
-            {
-                "config": null,
-                "payment": 10,
-                "timeout_express": "10m"
             }
-        ],
-        "missing": {
-            "configs": [
-                null,
-                "   "
-            ],
-            "field": "timeToLiveMinutes",
-            "message": "The timeToLiveMinutes field is required when the kbz_pay configuration has no [time_to_live_in_minutes]."
-        }
-    },
-    "wave_money_time_to_live_missing": {
-        "variable": "WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS",
-        "configs": [
-            null,
-            "   "
-        ],
-        "field": "timeToLiveSeconds",
-        "message": "The timeToLiveSeconds field is required when the wave_money configuration has no [time_to_live_in_seconds]."
+        ]
     }
 }

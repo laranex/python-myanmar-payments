@@ -48,10 +48,9 @@ from python_myanmar_payments._support import (
 )
 from python_myanmar_payments._validate import AmountRule, Validator
 from python_myanmar_payments._values import get, scalar_string
+from tests.helpers import gateway_config
 
-KBZ = KbzPayConfig(
-    app_id="a", app_key="b", merchant_code="c", timeout_seconds=30, api_url="https://kbz.test"
-)
+KBZ = KbzPayConfig(**gateway_config("kbz_pay", api_url="https://kbz.test"))
 
 
 class QueryDict:

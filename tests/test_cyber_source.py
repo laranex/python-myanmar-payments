@@ -20,10 +20,10 @@ from python_myanmar_payments import (
     SignatureVerificationError,
 )
 from tests.conftest import Clock
-from tests.helpers import hmac_base64
+from tests.helpers import gateway_config, hmac_base64
 
 SECRET = "cs-secret"
-CONFIG = CyberSourceConfig(profile_id="profile", access_key="access", secret_key=SECRET)
+CONFIG = CyberSourceConfig(**gateway_config("cyber_source", secret_key=SECRET))
 gateway = CyberSource(CONFIG)
 
 
@@ -251,12 +251,28 @@ class TestCyberSourceConfig:
             "CYBER_SOURCE_PROFILE_ID": "p",
             "CYBER_SOURCE_ACCESS_KEY": "a",
             "CYBER_SOURCE_SECRET_KEY": "s",
+            "CYBER_SOURCE_BASE_URL": "https://cs.test/",
         }
         config = CyberSourceConfig.from_env(env)
-        assert config.base_url == CyberSourceConfig.PRODUCTION_URL
+        assert config.base_url == "https://cs.test"
         assert repr(config) == "CyberSourceConfig(profile_id='p')"
-        overridden = {**env, "CYBER_SOURCE_BASE_URL": "https://cs.test/"}
-        assert CyberSource.from_env(overridden).config.base_url == "https://cs.test"
+        assert CyberSource.from_env(env).config.base_url == "https://cs.test"
         with pytest.raises(ConfigurationError) as info:
             CyberSource.from_env({})
         assert info.value.key == "profile_id"
+
+    @pytest.mark.parametrize("blank", [None, "", "   "])
+    def test_requires_the_base_url(self, blank: Any) -> None:
+        with pytest.raises(ConfigurationError) as info:
+            CyberSourceConfig(**gateway_config("cyber_source", base_url=blank))
+        assert info.value.gateway == "cyber_source"
+        assert info.value.key == "base_url"
+        assert str(info.value) == "The cyber_source configuration is missing [base_url]."
+        env = {
+            "CYBER_SOURCE_PROFILE_ID": "p",
+            "CYBER_SOURCE_ACCESS_KEY": "a",
+            "CYBER_SOURCE_SECRET_KEY": "s",
+        }
+        for extra in ({}, {"CYBER_SOURCE_BASE_URL": "  "}):
+            with pytest.raises(ConfigurationError, match=r"missing \[base_url\]"):
+                CyberSourceConfig.from_env({**env, **extra})

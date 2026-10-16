@@ -25,16 +25,11 @@ from python_myanmar_payments import (
     kbz_pay,
 )
 from tests.conftest import Clock
-from tests.helpers import NOW, FakeServer, fixture, make, run
+from tests.helpers import NOW, FakeServer, fixture, gateway_config, make, run
 
-CONFIG: dict[str, Any] = {
-    "app_id": "kp123",
-    "app_key": "secret-key",
-    "merchant_code": "100001",
-    "timeout_seconds": 30,
-    "api_url": "https://kbz.test",
-    "time_to_live_minutes": 120,
-}
+CONFIG: dict[str, Any] = gateway_config(
+    "kbz_pay", timeout_seconds=30, api_url="https://kbz.test", time_to_live_minutes=120
+)
 
 signer = KbzPaySigner("secret-key")
 
@@ -153,21 +148,6 @@ class TestKbzPay:
         assert payment.expires_at == datetime.fromtimestamp(NOW + 120 * 60, tz=timezone.utc)
         assert payment.qr_image_data_uri() is None
         assert request_of(server)["biz_content"]["trade_type"] == "PAY_BY_QRCODE"
-
-    @pytest.mark.parametrize("flow", ["pwa", "qr", "app"])
-    def test_requires_a_time_to_live_from_the_payment_or_the_config(
-        self, mode: str, flow: str
-    ) -> None:
-        server = FakeServer()
-        config = KbzPayConfig(**{**CONFIG, "time_to_live_minutes": None})
-        kbz = make(mode, KbzPay, AsyncKbzPay, config, server)
-        with pytest.raises(InvalidPaymentDataError) as info:
-            run(getattr(kbz, flow)(data()))
-        assert dict(info.value.errors) == {
-            "time_to_live_minutes": "The time_to_live_minutes field is required when the "
-            "kbz_pay configuration has no [time_to_live_in_minutes]."
-        }
-        assert server.requests == []
 
     def test_sets_the_qr_expiry_from_time_to_live_minutes(self, mode: str, clock: Clock) -> None:
         server = FakeServer(precreate(qrCode="qr"))
@@ -460,13 +440,55 @@ class TestKbzPay:
         assert "KBZ Pay accepts at most 2 decimal places" in info.value.errors["amount"]
 
 
+ENV = {
+    "KBZ_PAY_APP_ID": "kp1",
+    "KBZ_PAY_APP_KEY": "key",
+    "KBZ_PAY_MERCHANT_CODE": "200",
+    "KBZ_PAY_BASE_URL": "https://api.test/",
+    "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://pwa.test/#",
+    "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES": "45",
+    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "15",
+}
+
+
 class TestKbzPayConfig:
     def test_names_a_missing_key(self) -> None:
         with pytest.raises(ConfigurationError) as info:
-            KbzPayConfig(app_id="a", app_key="", merchant_code="c", timeout_seconds=30)
+            KbzPayConfig(**{**CONFIG, "app_key": ""})
         assert info.value.gateway == "kbz_pay"
         assert info.value.key == "app_key"
         assert str(info.value) == "The kbz_pay configuration is missing [app_key]."
+
+    @pytest.mark.parametrize("key", ["api_url", "pwa_url", "time_to_live_minutes"])
+    @pytest.mark.parametrize("blank", [None, "", "   "])
+    def test_requires_the_urls_and_the_time_to_live(self, key: str, blank: Any) -> None:
+        values = {**CONFIG, key: blank}
+        name = "time_to_live_in_minutes" if key == "time_to_live_minutes" else key
+        with pytest.raises(ConfigurationError) as info:
+            KbzPayConfig(**values)
+        assert info.value.key == name
+        assert str(info.value) == f"The kbz_pay configuration is missing [{name}]."
+        without = {k: v for k, v in CONFIG.items() if k != key}
+        with pytest.raises(ConfigurationError, match=rf"missing \[{name}\]"):
+            KbzPayConfig(**without)
+
+    @pytest.mark.parametrize(
+        "variable",
+        ["KBZ_PAY_BASE_URL", "KBZ_PAY_PWA_BASE_REDIRECT_URL", "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES"],
+    )
+    def test_requires_each_setting_in_the_environment(self, variable: str) -> None:
+        key = {
+            "KBZ_PAY_BASE_URL": "api_url",
+            "KBZ_PAY_PWA_BASE_REDIRECT_URL": "pwa_url",
+            "KBZ_PAY_TIME_TO_LIVE_IN_MINUTES": "time_to_live_in_minutes",
+        }[variable]
+        for value in (None, "  "):
+            env = {k: v for k, v in ENV.items() if k != variable}
+            if value is not None:
+                env[variable] = value
+            with pytest.raises(ConfigurationError) as info:
+                KbzPayConfig.from_env(env)
+            assert str(info.value) == f"The kbz_pay configuration is missing [{key}]."
 
     def test_normalizes_the_pwa_url_so_the_query_always_follows_the_hash(self) -> None:
         for pwa_url in (
@@ -476,29 +498,36 @@ class TestKbzPayConfig:
             config = KbzPayConfig(**{**CONFIG, "pwa_url": pwa_url})
             assert config.pwa_url == "https://static.kbzpay.com/pgw/uat/pwa/#/"
 
-    def test_defaults_to_the_production_endpoints(self) -> None:
-        production = KbzPayConfig(app_id="a", app_key="b", merchant_code="c", timeout_seconds=30)
-        assert production.api_url == KbzPayConfig.PRODUCTION_API_URL
-        assert production.pwa_url == KbzPayConfig.PRODUCTION_PWA_URL
+    def test_uses_the_configured_endpoints(self) -> None:
+        production = KbzPayConfig(
+            **{
+                **CONFIG,
+                "app_id": "a",
+                "api_url": KbzPayConfig.PRODUCTION_API_URL,
+                "pwa_url": KbzPayConfig.PRODUCTION_PWA_URL,
+            }
+        )
+        assert production.api_url == "https://api.kbzpay.com/payment/gateway"
+        assert production.pwa_url == "https://wap.kbzpay.com/pgw/pwa/#/"
         assert production.timeout_seconds == 30
         proxied = KbzPayConfig(**{**CONFIG, "api_url": "https://proxy.test/kbz/"})
         assert proxied.api_url == "https://proxy.test/kbz"
         assert repr(production) == "KbzPayConfig(app_id='a')"
 
     def test_defaults_the_timeout_and_requires_a_whole_number(self) -> None:
-        assert KbzPayConfig(app_id="a", app_key="b", merchant_code="c").timeout_seconds == 30
+        base = {k: v for k, v in CONFIG.items() if k != "timeout_seconds"}
+        assert KbzPayConfig(**base).timeout_seconds == 30
         for blank in (None, "", "   "):
-            config = KbzPayConfig(app_id="a", app_key="b", merchant_code="c", timeout_seconds=blank)
+            config = KbzPayConfig(**base, timeout_seconds=blank)
             assert config.timeout_seconds == DEFAULT_TIMEOUT_SECONDS == 30
         with pytest.raises(ConfigurationError) as info:
-            KbzPayConfig(app_id="a", app_key="b", merchant_code="c", timeout_seconds=0)
+            KbzPayConfig(**base, timeout_seconds=0)
         assert str(info.value) == (
             "The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0."
         )
 
-    def test_takes_an_optional_time_to_live_in_minutes(self) -> None:
-        base = {"app_id": "a", "app_key": "b", "merchant_code": "c"}
-        assert KbzPayConfig(**base).time_to_live_minutes is None
+    def test_takes_a_time_to_live_in_minutes_from_1_to_120(self) -> None:
+        base = {k: v for k, v in CONFIG.items() if k != "time_to_live_minutes"}
         assert KbzPayConfig(**base, time_to_live_minutes=30).time_to_live_minutes == 30
         assert KbzPayConfig(**base, time_to_live_minutes=" 120 ").time_to_live_minutes == 120
         for invalid in (0, 121, -5, True, "thirty"):
@@ -511,32 +540,24 @@ class TestKbzPayConfig:
             )
 
     def test_reads_the_environment(self, mode: str) -> None:
-        env = {
-            "KBZ_PAY_APP_ID": "kp1",
-            "KBZ_PAY_APP_KEY": "key",
-            "KBZ_PAY_MERCHANT_CODE": "200",
-            "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "15",
-            "KBZ_PAY_BASE_URL": "https://api.test/",
-            "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://pwa.test/#",
-        }
-        config = KbzPayConfig.from_env(env)
+        config = KbzPayConfig.from_env(ENV)
         assert config.app_id == "kp1"
         assert config.app_key == "key"
         assert config.merchant_code == "200"
         assert config.timeout_seconds == 15
         assert config.api_url == "https://api.test"
         assert config.pwa_url == "https://pwa.test/#/"
+        assert config.time_to_live_minutes == 45
         cls = KbzPay if mode == "sync" else AsyncKbzPay
-        assert cls.from_env(env).config.app_id == "kp1"
+        assert cls.from_env(ENV).config.app_id == "kp1"
         with pytest.raises(ConfigurationError) as info:
             cls.from_env({})
         assert info.value.key == "app_id"
 
     def test_reads_os_environ_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for key, value in ENV.items():
+            monkeypatch.setenv(key, value)
         monkeypatch.setenv("KBZ_PAY_APP_ID", "from-process")
-        monkeypatch.setenv("KBZ_PAY_APP_KEY", "k")
-        monkeypatch.setenv("KBZ_PAY_MERCHANT_CODE", "m")
-        monkeypatch.setenv("MYANMAR_PAYMENTS_HTTP_TIMEOUT", "30")
         assert KbzPayConfig.from_env().app_id == "from-process"
         assert KbzPay.from_env().config.app_id == "from-process"
 
