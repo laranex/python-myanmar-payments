@@ -45,6 +45,14 @@ The SDK works with FastAPI as is: use the async clients in your endpoints. The s
 pip install fastapi-myanmar-payments
 ```
 
+### Django adapter (optional)
+
+The SDK works with Django as is: sync clients in sync views, async clients in async views. The separate [`django-myanmar-payments`](adapters/django) package adds optional conveniences on top of it: gateways from a `MYANMAR_PAYMENTS` setting with `manage.py check` validation, sync and async access, Yoma MMQR token caches on Django's cache, raw callback requests and acknowledgement responses. It is versioned and released independently (`django/v*` tags).
+
+```bash
+pip install django-myanmar-payments
+```
+
 ## Documentation
 
 The full documentation lives at **[laranex.vercel.app/python-myanmar-payments](https://laranex.vercel.app/python-myanmar-payments)**:
