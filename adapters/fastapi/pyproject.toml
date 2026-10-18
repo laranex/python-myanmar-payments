@@ -1,0 +1,106 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fastapi-myanmar-payments"
+dynamic = ["version"]
+description = "FastAPI integration for python-myanmar-payments: lifespan, dependencies, verified callbacks and gateway acknowledgements."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE.md"]
+requires-python = ">=3.10"
+authors = [{ name = "Soe Thura", email = "thixpin@gmail.com" }]
+keywords = [
+    "laranex",
+    "python-myanmar-payments",
+    "fastapi",
+    "myanmar",
+    "payments",
+    "payment-gateway",
+    "webhooks",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Framework :: AsyncIO",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+# 4.0.0a16 is the first published core with every API the adapter uses (AsyncWavePay).
+dependencies = [
+    "fastapi>=0.115",
+    "python-myanmar-payments>=4.0.0a16,<5",
+]
+
+[project.urls]
+Homepage = "https://github.com/laranex/python-myanmar-payments/tree/dev/adapters/fastapi"
+Documentation = "https://github.com/laranex/python-myanmar-payments/tree/dev/adapters/fastapi#readme"
+Repository = "https://github.com/laranex/python-myanmar-payments"
+Issues = "https://github.com/laranex/python-myanmar-payments/issues"
+Changelog = "https://github.com/laranex/python-myanmar-payments/blob/dev/adapters/fastapi/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+]
+
+[tool.hatch.version]
+path = "src/fastapi_myanmar_payments/_version.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/skills",
+    "/CHANGELOG.md",
+    "/LICENSE.md",
+    "/README.md",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fastapi_myanmar_payments"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+xfail_strict = true
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+source = ["fastapi_myanmar_payments"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 100
+exclude_also = ["if TYPE_CHECKING:"]
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
+files = ["src", "tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "C4", "PT", "PIE", "RET", "N"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["N802"]

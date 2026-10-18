@@ -19,6 +19,10 @@ This repository is a framework-agnostic Python SDK for Myanmar payment gateways.
 - Tests with coverage (100% lines and branches): `uv run pytest --cov`
 - Build: `uv build`
 
+## FastAPI Adapter
+
+`adapters/fastapi` is the separate `fastapi-myanmar-payments` package (own `pyproject.toml`, `uv.lock`, version in `src/fastapi_myanmar_payments/_version.py`, `fastapi/v*` tags). It depends on the core SDK from PyPI and adds only FastAPI glue: lifespan, dependencies, `CallbackRequest` from the raw request, `Acknowledgement` as a response. Never reimplement core behavior there; report missing core features instead. Run its checks from `adapters/fastapi` with the same commands.
+
 ## Agent Skill
 
 `skills/python-myanmar-payments/SKILL.md` describes only how to use the package in an application. `tests/test_myanmar_payments.py` checks that every class and method it names exists.

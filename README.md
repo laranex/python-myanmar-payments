@@ -37,6 +37,14 @@ uv add python-myanmar-payments
 poetry add python-myanmar-payments
 ```
 
+### FastAPI adapter (optional)
+
+The SDK works with FastAPI as is: use the async clients in your endpoints. The separate [`fastapi-myanmar-payments`](adapters/fastapi) package adds optional conveniences on top of it: a lifespan that owns one `AsyncMyanmarPayments`, gateway dependencies, raw callback requests and acknowledgement responses. It is versioned and released independently (`fastapi/v*` tags).
+
+```bash
+pip install fastapi-myanmar-payments
+```
+
 ## Documentation
 
 The full documentation lives at **[laranex.vercel.app/python-myanmar-payments](https://laranex.vercel.app/python-myanmar-payments)**:
