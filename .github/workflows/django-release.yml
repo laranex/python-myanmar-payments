@@ -1,0 +1,181 @@
+name: django-release
+
+# Pushing a django/v* tag (django/v0.1.0, django/v0.1.0-dev.0, ...) releases the
+# Django adapter, independently of the core SDK's v* tags (release.yml): the adapter
+# suite runs, the package is published to PyPI through trusted publishing (OIDC, no
+# token) once the release is approved in the protected `pypi-django` environment, and
+# the GitHub release is created from the matching adapters/django/CHANGELOG.md section.
+# Tags map to PEP 440 versions: django/v0.1.0-dev.0 -> 0.1.0.dev0, -alpha.1 -> 0.1.0a1,
+# -beta.2 -> 0.1.0b2, -rc.1 -> 0.1.0rc1, django/v0.1.0 -> 0.1.0. The mapped version
+# must equal __version__ in adapters/django/src/django_myanmar_payments/_version.py.
+#
+# One-time setup by a repository admin:
+# - Settings > Environments: create `pypi-django` with required reviewers and
+#   restrict its deployment tags to `django/v*`.
+# - PyPI: add a (pending) trusted publisher for `django-myanmar-payments` with this
+#   repository, workflow `django-release.yml` and environment `pypi-django`.
+
+on:
+  push:
+    tags:
+      - 'django/v*'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate the tag
+        id: tag
+        run: |
+          pattern='^django/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(dev|alpha|beta|rc)\.(0|[1-9][0-9]*))?$'
+          if [[ ! "$GITHUB_REF_NAME" =~ $pattern ]]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' is not django/vMAJOR.MINOR.PATCH with an optional -dev.N, -alpha.N, -beta.N or -rc.N suffix."
+            exit 1
+          fi
+
+          version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          prerelease=false
+          case "${BASH_REMATCH[5]}" in
+            dev) version="${version}.dev${BASH_REMATCH[6]}"; prerelease=true ;;
+            alpha) version="${version}a${BASH_REMATCH[6]}"; prerelease=true ;;
+            beta) version="${version}b${BASH_REMATCH[6]}"; prerelease=true ;;
+            rc) version="${version}rc${BASH_REMATCH[6]}"; prerelease=true ;;
+          esac
+
+          package="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' adapters/django/src/django_myanmar_payments/_version.py)"
+          if [[ "$package" != "$version" ]]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' maps to version $version, but _version.py has '$package': set __version__ = \"$version\" or tag the commit that has it."
+            exit 1
+          fi
+
+          {
+            echo "version=$version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $GITHUB_REF_NAME as $version (prerelease: $prerelease)"
+
+  tests:
+    name: Tests
+    uses: ./.github/workflows/django.yml
+
+  build:
+    name: Build
+    needs: [validate, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: adapters/django
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Build the sdist and wheel
+        run: uv build --no-sources
+
+      - name: Check the built version and metadata
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          ls dist
+          test -f "dist/django_myanmar_payments-$VERSION-py3-none-any.whl"
+          test -f "dist/django_myanmar_payments-$VERSION.tar.gz"
+          # The core SDK must come from PyPI, never a local path.
+          unzip -p "dist/django_myanmar_payments-$VERSION-py3-none-any.whl" '*/METADATA' \
+            | grep -E '^Requires-Dist: python-myanmar-payments[<>=!~ ,0-9a-z.]*$'
+
+      - name: Upload the distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: django-dist
+          path: adapters/django/dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi-django
+      url: https://pypi.org/project/django-myanmar-payments/${{ needs.validate.outputs.version }}/
+
+    permissions:
+      id-token: write # PyPI trusted publishing
+
+    steps:
+      - name: Download the distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: django-dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+  release:
+    name: GitHub release
+    needs: [validate, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "The $GITHUB_REF_NAME release already exists; skipping."
+            exit 0
+          fi
+
+          # Release notes: the adapters/django/CHANGELOG.md section whose heading is
+          # "## django/v0.1.0" or "## 0.1.0" (optionally "- <date>"), up to the next "## ".
+          notes="$RUNNER_TEMP/release-notes.md"
+          changelog=adapters/django/CHANGELOG.md
+          if [[ -f "$changelog" ]]; then
+            awk -v tag="$GITHUB_REF_NAME" -v version="$VERSION" '
+              /^## / { if (found) exit; found = ($2 == tag || $2 == version); next }
+              found { print }
+            ' "$changelog" > "$notes"
+          fi
+
+          # --latest=false keeps the core SDK's release as the repository's latest.
+          args=(--verify-tag --latest=false --title "$GITHUB_REF_NAME")
+          if [[ -f "$notes" ]] && grep -q '[^[:space:]]' "$notes"; then
+            args+=(--notes-file "$notes")
+          else
+            echo "::warning::$changelog has no '## $GITHUB_REF_NAME' section; using generated release notes."
+            args+=(--generate-notes)
+          fi
+          [[ "$PRERELEASE" == true ]] && args+=(--prerelease)
+
+          gh release create "$GITHUB_REF_NAME" "${args[@]}"

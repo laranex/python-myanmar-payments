@@ -1,0 +1,126 @@
+name: django
+
+# Tests the Django adapter (adapters/django) against the core SDK published on PyPI,
+# at the dependency floors (Django 5.2, python-myanmar-payments 4.0.0a16), Django 6.0 and
+# the newest releases (the lock has Django 5.2 for Python 3.10-3.11, 6.1 for 3.12+), plus once against this checkout's core so a core change that would
+# break the adapter shows up before the core is released.
+
+on:
+  push:
+    branches:
+      - '**'
+    paths:
+      - 'adapters/django/**'
+      - 'src/python_myanmar_payments/**'
+      - 'tests/fixtures/**'
+      - '.github/workflows/django.yml'
+  pull_request:
+    paths:
+      - 'adapters/django/**'
+      - 'src/python_myanmar_payments/**'
+      - 'tests/fixtures/**'
+      - '.github/workflows/django.yml'
+  workflow_dispatch:
+  # django-release.yml runs the suite before publishing a django/v* tag.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        dependencies: [highest]
+        core: [pypi]
+        django: [locked]
+        include:
+          # Proves the floors: django==5.2 and python-myanmar-payments==4.0.0a16.
+          - python: '3.10'
+            dependencies: lowest
+            core: pypi
+            django: lowest
+          # Django 6.0, still supported, between the floor and the locked 6.1.
+          - python: '3.12'
+            dependencies: highest
+            core: pypi
+            django: '6.0'
+          # The core SDK from this checkout instead of PyPI.
+          - python: '3.14'
+            dependencies: highest
+            core: source
+            django: locked
+
+    name: Python ${{ matrix.python }} - ${{ matrix.dependencies }} - Django ${{ matrix.django }} - core ${{ matrix.core }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: adapters/django
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Install dependencies
+        env:
+          PYTHON: ${{ matrix.python }}
+          DEPENDENCIES: ${{ matrix.dependencies }}
+          CORE: ${{ matrix.core }}
+          DJANGO: ${{ matrix.django }}
+        run: |
+          if [[ "$DEPENDENCIES" == lowest ]]; then
+            uv venv --python "$PYTHON"
+            uv pip install --resolution lowest-direct --editable . --group dev
+          else
+            uv sync --locked --python "$PYTHON"
+          fi
+          if [[ "$CORE" == source ]]; then
+            uv pip install --editable ../..
+          fi
+          if [[ "$DJANGO" =~ ^[0-9] ]]; then
+            uv pip install "django~=$DJANGO.0"
+          fi
+          uv pip list | grep -Ei '^(django|python-myanmar-payments) '
+
+      - name: Lint
+        if: matrix.dependencies == 'highest' && matrix.core == 'pypi' && matrix.django == 'locked'
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+
+      - name: Typecheck
+        if: matrix.dependencies == 'highest'
+        run: uv run --no-sync mypy
+
+      - name: Test
+        run: uv run --no-sync pytest --cov
+
+      - name: Build
+        run: uv build --no-sources
+
+      - name: Test the built wheel with the core SDK
+        env:
+          PYTHON: ${{ matrix.python }}
+          CORE: ${{ matrix.core }}
+        run: |
+          wheels=(--with dist/*.whl)
+          if [[ "$CORE" == source ]]; then
+            uv build --wheel --out-dir core-dist ../..
+            wheels+=(--with core-dist/*.whl)
+          fi
+          uv run --isolated --no-project --python "$PYTHON" "${wheels[@]}" python -c "
+          import django_myanmar_payments as adapter, python_myanmar_payments as core
+          print(adapter.__version__, core.__version__, adapter.get_payments, adapter.verify_callback)
+          "

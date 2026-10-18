@@ -23,3 +23,10 @@ updates:
       interval: 'weekly'
     labels:
       - 'dependencies'
+
+  - package-ecosystem: 'pip'
+    directory: '/adapters/django'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'
