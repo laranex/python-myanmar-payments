@@ -16,3 +16,10 @@ updates:
       interval: 'weekly'
     labels:
       - 'dependencies'
+
+  - package-ecosystem: 'pip'
+    directory: '/adapters/fastapi'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'

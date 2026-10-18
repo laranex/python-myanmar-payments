@@ -1,0 +1,114 @@
+name: fastapi
+
+# Tests the FastAPI adapter (adapters/fastapi) against the core SDK published on PyPI,
+# at the dependency floors (FastAPI 0.115, python-myanmar-payments 4.0.0a16) and the
+# newest releases, plus once against this checkout's core so a core change that would
+# break the adapter shows up before the core is released.
+
+on:
+  push:
+    branches:
+      - '**'
+    paths:
+      - 'adapters/fastapi/**'
+      - 'src/python_myanmar_payments/**'
+      - 'tests/fixtures/**'
+      - '.github/workflows/fastapi.yml'
+  pull_request:
+    paths:
+      - 'adapters/fastapi/**'
+      - 'src/python_myanmar_payments/**'
+      - 'tests/fixtures/**'
+      - '.github/workflows/fastapi.yml'
+  workflow_dispatch:
+  # fastapi-release.yml runs the suite before publishing a fastapi/v* tag.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        dependencies: [highest]
+        core: [pypi]
+        include:
+          # Proves the floors: fastapi==0.115.0 and python-myanmar-payments==4.0.0a16.
+          - python: '3.10'
+            dependencies: lowest
+            core: pypi
+          # The core SDK from this checkout instead of PyPI.
+          - python: '3.14'
+            dependencies: highest
+            core: source
+
+    name: Python ${{ matrix.python }} - ${{ matrix.dependencies }} - core ${{ matrix.core }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: adapters/fastapi
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Install dependencies
+        env:
+          PYTHON: ${{ matrix.python }}
+          DEPENDENCIES: ${{ matrix.dependencies }}
+          CORE: ${{ matrix.core }}
+        run: |
+          if [[ "$DEPENDENCIES" == lowest ]]; then
+            uv venv --python "$PYTHON"
+            uv pip install --resolution lowest-direct --editable . --group dev
+          else
+            uv sync --locked --python "$PYTHON"
+          fi
+          if [[ "$CORE" == source ]]; then
+            uv pip install --editable ../..
+          fi
+          uv pip list | grep -Ei '^(fastapi|starlette|python-myanmar-payments) '
+
+      - name: Lint
+        if: matrix.dependencies == 'highest' && matrix.core == 'pypi'
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+
+      - name: Typecheck
+        if: matrix.dependencies == 'highest'
+        run: uv run --no-sync mypy
+
+      - name: Test
+        run: uv run --no-sync pytest --cov
+
+      - name: Build
+        run: uv build --no-sources
+
+      - name: Test the built wheel with the core SDK
+        env:
+          PYTHON: ${{ matrix.python }}
+          CORE: ${{ matrix.core }}
+        run: |
+          wheels=(--with dist/*.whl)
+          if [[ "$CORE" == source ]]; then
+            uv build --wheel --out-dir core-dist ../..
+            wheels+=(--with core-dist/*.whl)
+          fi
+          uv run --isolated --no-project --python "$PYTHON" "${wheels[@]}" python -c "
+          import fastapi_myanmar_payments as adapter, python_myanmar_payments as core
+          print(adapter.__version__, core.__version__, adapter.payments_lifespan, adapter.KbzPayDep)
+          "
