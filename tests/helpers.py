@@ -127,6 +127,13 @@ _GATEWAY_CONFIGS: dict[str, dict[str, Any]] = {
         "base_redirect_url": "https://payments.wavemoney.io",
         "time_to_live_seconds": 300,
     },
+    "wave_pay_mini_app": {
+        "client_id": "client",
+        "client_secret": "client-secret",
+        "mini_app_id": "MINI456",
+        "secret_key": "test-secret",
+        "base_url": "https://api.wavemoney.io:8100",
+    },
     "aya_pay": {
         "app_key": "app-key",
         "app_secret": "test-secret",

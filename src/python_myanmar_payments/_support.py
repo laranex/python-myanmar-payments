@@ -202,6 +202,20 @@ def require_setting(gateway: str, key: str, value: object) -> str:
     return value
 
 
+# The leading digits of expires_in after ASCII whitespace, like PHP's /^\s*([0-9]+)/.
+_LEADING_INT = re.compile(r"[ \t\n\r\x0b\x0c]*([0-9]+)")
+
+
+def token_ttl(expires_in: str) -> int:
+    """Seconds to cache an access token: its lifetime minus a minute, at least a minute.
+
+    ``expires_in`` is read by its leading digits; none (or 0) means one hour.
+    """
+    match = _LEADING_INT.match(expires_in)
+    seconds = int(match.group(1)) if match else 0
+    return max(60, (seconds if seconds > 0 else 3600) - 60)
+
+
 def trim_url(url: str) -> str:
     """Removes trailing slashes."""
     return url.rstrip("/")

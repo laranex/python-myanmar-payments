@@ -15,6 +15,7 @@ from .aya_pay import AsyncAyaPay, AyaPay, AyaPayConfig
 from .cyber_source import CyberSource, CyberSourceConfig
 from .kbz_pay import AsyncKbzPay, KbzPay, KbzPayConfig
 from .wave_pay import AsyncWavePay, WavePay, WavePayConfig
+from .wave_pay_mini_app import AsyncWavePayMiniApp, WavePayMiniApp, WavePayMiniAppConfig
 from .yoma_mmqr import AsyncYomaMmqr, YomaMmqr, YomaMmqrConfig
 
 __all__ = ["AsyncMyanmarPayments", "MyanmarPayments"]
@@ -39,12 +40,14 @@ class _Payments:
         self,
         kbz_pay: KbzPayConfig | Mapping[str, Any] | None,
         wave_pay: WavePayConfig | Mapping[str, Any] | None,
+        wave_pay_mini_app: WavePayMiniAppConfig | Mapping[str, Any] | None,
         aya_pay: AyaPayConfig | Mapping[str, Any] | None,
         yoma_mmqr: YomaMmqrConfig | Mapping[str, Any] | None,
         cyber_source: CyberSourceConfig | Mapping[str, Any] | None,
     ) -> None:
         self._kbz_pay_config = _lazy(KbzPayConfig, kbz_pay)
         self._wave_pay_config = _lazy(WavePayConfig, wave_pay)
+        self._wave_pay_mini_app_config = _lazy(WavePayMiniAppConfig, wave_pay_mini_app)
         self._aya_pay_config = _lazy(AyaPayConfig, aya_pay)
         self._yoma_mmqr_config = _lazy(YomaMmqrConfig, yoma_mmqr)
         self._cyber_source_config = _lazy(CyberSourceConfig, cyber_source)
@@ -53,6 +56,7 @@ class _Payments:
     def _read_env(self, env: EnvSource | None) -> None:
         self._kbz_pay_config = lambda: KbzPayConfig.from_env(env)
         self._wave_pay_config = lambda: WavePayConfig.from_env(env)
+        self._wave_pay_mini_app_config = lambda: WavePayMiniAppConfig.from_env(env)
         self._aya_pay_config = lambda: AyaPayConfig.from_env(env)
         self._yoma_mmqr_config = lambda: YomaMmqrConfig.from_env(env)
         self._cyber_source_config = lambda: CyberSourceConfig.from_env(env)
@@ -78,19 +82,21 @@ class MyanmarPayments(_Payments):
         *,
         kbz_pay: KbzPayConfig | Mapping[str, Any] | None = None,
         wave_pay: WavePayConfig | Mapping[str, Any] | None = None,
+        wave_pay_mini_app: WavePayMiniAppConfig | Mapping[str, Any] | None = None,
         aya_pay: AyaPayConfig | Mapping[str, Any] | None = None,
         yoma_mmqr: YomaMmqrConfig | Mapping[str, Any] | None = None,
         cyber_source: CyberSourceConfig | Mapping[str, Any] | None = None,
         token_cache: TokenCache | None = None,
         http_client: httpx.Client | None = None,
     ) -> None:
-        super().__init__(kbz_pay, wave_pay, aya_pay, yoma_mmqr, cyber_source)
+        super().__init__(kbz_pay, wave_pay, wave_pay_mini_app, aya_pay, yoma_mmqr, cyber_source)
         self._http_client = http_client
         self._token_cache: TokenCache = (
             token_cache if token_cache is not None else MemoryTokenCache()
         )
         self._kbz_pay: KbzPay | None = None
         self._wave_pay: WavePay | None = None
+        self._wave_pay_mini_app: WavePayMiniApp | None = None
         self._aya_pay: AyaPay | None = None
         self._yoma_mmqr: YomaMmqr | None = None
 
@@ -104,8 +110,8 @@ class MyanmarPayments(_Payments):
     ) -> MyanmarPayments:
         """Reads every gateway's configuration from environment variables.
 
-        ``KBZ_PAY_*``, ``WAVE_PAY_*``, ``AYA_PAY_*``, ``YOMA_MMQR_*``,
-        ``CYBER_SOURCE_*`` and ``MYANMAR_PAYMENTS_HTTP_TIMEOUT`` are read when the
+        ``KBZ_PAY_*``, ``WAVE_PAY_*``, ``WAVE_PAY_MINI_APP_*``, ``AYA_PAY_*``,
+        ``YOMA_MMQR_*``, ``CYBER_SOURCE_*`` and ``MYANMAR_PAYMENTS_HTTP_TIMEOUT`` are read when the
         gateway is first used. Defaults to ``os.environ``.
         """
         payments = cls(token_cache=token_cache, http_client=http_client)
@@ -125,6 +131,17 @@ class MyanmarPayments(_Payments):
             config = _resolve(self._wave_pay_config, "wave_pay", "merchant_id")
             self._wave_pay = WavePay(config, http_client=self._http_client)
         return self._wave_pay
+
+    def wave_pay_mini_app(self) -> WavePayMiniApp:
+        """The Wave Pay Mini App gateway. Raises a ``ConfigurationError`` when not configured."""
+        if self._wave_pay_mini_app is None:
+            config = _resolve(self._wave_pay_mini_app_config, "wave_pay_mini_app", "client_id")
+            self._wave_pay_mini_app = WavePayMiniApp(
+                config,
+                token_cache=self._token_cache,
+                http_client=self._http_client,
+            )
+        return self._wave_pay_mini_app
 
     def aya_pay(self) -> AyaPay:
         """The AYA Payment Gateway. Raises a ``ConfigurationError`` when not configured."""
@@ -146,7 +163,13 @@ class MyanmarPayments(_Payments):
 
     def close(self) -> None:
         """Closes the HTTP clients the gateways created. A client you passed stays open."""
-        for gateway in (self._kbz_pay, self._wave_pay, self._aya_pay, self._yoma_mmqr):
+        for gateway in (
+            self._kbz_pay,
+            self._wave_pay,
+            self._wave_pay_mini_app,
+            self._aya_pay,
+            self._yoma_mmqr,
+        ):
             if gateway is not None:
                 gateway.close()
 
@@ -175,19 +198,21 @@ class AsyncMyanmarPayments(_Payments):
         *,
         kbz_pay: KbzPayConfig | Mapping[str, Any] | None = None,
         wave_pay: WavePayConfig | Mapping[str, Any] | None = None,
+        wave_pay_mini_app: WavePayMiniAppConfig | Mapping[str, Any] | None = None,
         aya_pay: AyaPayConfig | Mapping[str, Any] | None = None,
         yoma_mmqr: YomaMmqrConfig | Mapping[str, Any] | None = None,
         cyber_source: CyberSourceConfig | Mapping[str, Any] | None = None,
         token_cache: TokenCache | AsyncTokenCache | None = None,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
-        super().__init__(kbz_pay, wave_pay, aya_pay, yoma_mmqr, cyber_source)
+        super().__init__(kbz_pay, wave_pay, wave_pay_mini_app, aya_pay, yoma_mmqr, cyber_source)
         self._http_client = http_client
         self._token_cache: TokenCache | AsyncTokenCache = (
             token_cache if token_cache is not None else MemoryTokenCache()
         )
         self._kbz_pay: AsyncKbzPay | None = None
         self._wave_pay: AsyncWavePay | None = None
+        self._wave_pay_mini_app: AsyncWavePayMiniApp | None = None
         self._aya_pay: AsyncAyaPay | None = None
         self._yoma_mmqr: AsyncYomaMmqr | None = None
 
@@ -218,6 +243,17 @@ class AsyncMyanmarPayments(_Payments):
             self._wave_pay = AsyncWavePay(config, http_client=self._http_client)
         return self._wave_pay
 
+    def wave_pay_mini_app(self) -> AsyncWavePayMiniApp:
+        """The Wave Pay Mini App gateway. Raises a ``ConfigurationError`` when not configured."""
+        if self._wave_pay_mini_app is None:
+            config = _resolve(self._wave_pay_mini_app_config, "wave_pay_mini_app", "client_id")
+            self._wave_pay_mini_app = AsyncWavePayMiniApp(
+                config,
+                token_cache=self._token_cache,
+                http_client=self._http_client,
+            )
+        return self._wave_pay_mini_app
+
     def aya_pay(self) -> AsyncAyaPay:
         """The AYA Payment Gateway. Raises a ``ConfigurationError`` when not configured."""
         if self._aya_pay is None:
@@ -238,7 +274,13 @@ class AsyncMyanmarPayments(_Payments):
 
     async def aclose(self) -> None:
         """Closes the HTTP clients the gateways created. A client you passed stays open."""
-        for gateway in (self._kbz_pay, self._wave_pay, self._aya_pay, self._yoma_mmqr):
+        for gateway in (
+            self._kbz_pay,
+            self._wave_pay,
+            self._wave_pay_mini_app,
+            self._aya_pay,
+            self._yoma_mmqr,
+        ):
             if gateway is not None:
                 await gateway.aclose()
 

@@ -13,6 +13,7 @@ from python_myanmar_payments import (
     AsyncAyaPay,
     AsyncKbzPay,
     AsyncWavePay,
+    AsyncWavePayMiniApp,
     AsyncYomaMmqr,
     AyaPay,
     AyaPayConfig,
@@ -30,18 +31,23 @@ from python_myanmar_payments import (
     KbzPayConfig,
     KbzPayPaymentData,
     MemoryTokenCache,
+    MiniAppPayment,
     PaymentCallback,
     SignatureVerificationError,
     WavePay,
     WavePayConfig,
     WavePayItem,
+    WavePayMiniApp,
+    WavePayMiniAppConfig,
+    WavePayMiniAppItem,
+    WavePayMiniAppPaymentData,
     WavePayPaymentData,
     YomaMmqr,
     YomaMmqrConfig,
     YomaMmqrPaymentData,
 )
 from python_myanmar_payments._validate import Validator
-from tests.helpers import FakeServer, fixture, gateway_config, make, run
+from tests.helpers import FakeServer, fixture, gateway_config, hmac_hex, make, run
 
 VECTORS = fixture("parity/vectors.json")
 SECRETS: dict[str, str] = VECTORS["secrets"]
@@ -60,6 +66,7 @@ CONFIG_ENV: dict[str, str] = CONFIG["env"]
 CONFIGS: dict[str, Any] = {
     "kbz_pay": KbzPayConfig,
     "wave_pay": WavePayConfig,
+    "wave_pay_mini_app": WavePayMiniAppConfig,
     "aya_pay": AyaPayConfig,
     "yoma_mmqr": YomaMmqrConfig,
     "cyber_source": CyberSourceConfig,
@@ -79,27 +86,57 @@ def gateways() -> dict[str, Any]:
 CALLBACKS = [
     pytest.param(gateway, case, id=f"{gateway}: {case['name']}")
     for gateway, cases in VECTORS["callbacks"].items()
+    if gateway != "wave_pay_mini_app"
     for case in cases
 ]
 
 
 @pytest.mark.parametrize(("gateway", "case"), CALLBACKS)
 def test_callbacks(gateway: str, case: dict[str, Any]) -> None:
+    assert_callback(gateways()[gateway].handle_callback, case)
+
+
+@pytest.mark.parametrize(
+    "case", VECTORS["callbacks"]["wave_pay_mini_app"], ids=lambda case: case["name"]
+)
+def test_wave_pay_mini_app_callbacks(mode: str, case: dict[str, Any]) -> None:
+    """Wave Pay Mini App also takes the callback URL the payment was signed with."""
+    gateway = make(
+        mode,
+        WavePayMiniApp,
+        AsyncWavePayMiniApp,
+        WavePayMiniAppConfig(
+            **gateway_config(
+                "wave_pay_mini_app",
+                secret_key=SECRETS["wave_pay_mini_app_secret_key"],
+                mini_app_id=SECRETS["wave_pay_mini_app_mini_app_id"],
+            )
+        ),
+    )
+    callback = assert_callback(
+        lambda request: gateway.handle_callback(request, case["callback_url"]), case
+    )
+    if callback is not None:
+        assert callback.raw["merchantRefId"] == case["expected"]["merchant_reference_id"]
+
+
+def assert_callback(handle: Any, case: dict[str, Any]) -> PaymentCallback | None:
+    """Verifies a callback case; returns the callback when it is valid."""
     headers = {"Content-Type": case["content_type"], **case.get("headers", {})}
     request = CallbackRequest(body=case["body"], headers=headers)
     expected = case["expected"]
-    handle = gateways()[gateway].handle_callback
     if not expected["valid"]:
         with pytest.raises(SignatureVerificationError) as info:
             handle(request)
         assert str(info.value) == expected["message"]
-        return
+        return None
     callback: PaymentCallback = handle(request)
     assert callback.order_id == expected["order_id"]
     assert callback.status == expected["status"]
     assert callback.gateway_status == expected["gateway_status"]
     assert callback.gateway_reference == expected.get("gateway_reference")
     assert callback.amount == expected.get("amount")
+    return callback
 
 
 @pytest.mark.parametrize("case", VECTORS["amount_parse"], ids=lambda case: repr(case["input"]))
@@ -174,7 +211,9 @@ DEFAULT_TIMEOUT = CONFIG["default_timeout"]
 
 
 @pytest.mark.parametrize("value", DEFAULT_TIMEOUT["values"], ids=repr)
-@pytest.mark.parametrize("gateway", ["kbz_pay", "wave_pay", "aya_pay", "yoma_mmqr"])
+@pytest.mark.parametrize(
+    "gateway", ["kbz_pay", "wave_pay", "wave_pay_mini_app", "aya_pay", "yoma_mmqr"]
+)
 def test_config_default_timeout(gateway: str, value: str | None) -> None:
     env = dict(CONFIG_ENV)
     if value is None:
@@ -612,6 +651,8 @@ def negative_amount_data(gateway: str, data: dict[str, Any]) -> tuple[Any, Any]:
         return KbzPay.validate, KbzPayPaymentData(**data)
     if gateway == "wave_pay":
         return WavePay.validate, wave_vector_data(data)
+    if gateway == "wave_pay_mini_app":
+        return WavePayMiniApp.validate, mini_app_data(data)
     if gateway == "aya_pay":
         return AyaPay.validate, AyaPayPaymentData(
             **{**data, "method": AyaPayMethod(data["method"])}
@@ -754,3 +795,130 @@ def test_kbz_pay_responses(mode: str, case: dict[str, Any]) -> None:
     else:
         actual = {"qr_string": result.qr_string, "reference": result.reference}
     assert actual == case["result"]
+
+
+def mini_app_data(data: dict[str, Any]) -> WavePayMiniAppPaymentData:
+    """A Wave Pay Mini App payment from a vector's snake_case data; string amounts are parsed."""
+    return WavePayMiniAppPaymentData(
+        order_id=data["order_id"],
+        callback_url=data["callback_url"],
+        items=[WavePayMiniAppItem(name, wave_amount(amount)) for name, amount in data["items"]],
+        amount=wave_amount(data.get("amount")),
+        merchant_reference_id=data.get("merchant_reference_id"),
+    )
+
+
+class TtlCache(MemoryTokenCache):
+    """Records the TTL of the last value it was given."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.ttl: int | None = None
+
+    def set(self, key: str, value: str, ttl_seconds: int) -> None:
+        super().set(key, value, ttl_seconds)
+        self.ttl = ttl_seconds
+
+
+MINI_APP_TOKEN = VECTORS["wave_pay_mini_app_token"]
+
+
+def mini_app(mode: str, config: dict[str, Any], server: FakeServer, cache: Any = None) -> Any:
+    return make(
+        mode,
+        WavePayMiniApp,
+        AsyncWavePayMiniApp,
+        WavePayMiniAppConfig(**config),
+        server,
+        token_cache=cache,
+    )
+
+
+def test_wave_pay_mini_app_token(mode: str) -> None:
+    response = MINI_APP_TOKEN["response"]
+    expected = MINI_APP_TOKEN["expected"]
+    cache = TtlCache()
+    server = FakeServer((response["status"], response["body"]), {"access_token": "token-2"})
+    gateway = mini_app(mode, MINI_APP_TOKEN["config"], server, cache)
+
+    assert run(gateway.access_token()) == expected["token"]
+    assert run(gateway.access_token()) == expected["token"]
+    assert len(server.requests) == 1
+    sent = server.last()
+    assert sent.method == expected["method"]
+    assert sent.url == expected["url"]
+    assert {name: sent.headers[name.lower()] for name in expected["headers"]} == expected["headers"]
+    assert sent.body == expected["body"]
+    assert sent.form() == expected["form"]
+    assert cache.get(expected["cache_key"]) == expected["token"]
+    assert cache.ttl == expected["ttl"]
+
+    run(gateway.forget_token())
+    assert cache.get(expected["cache_key"]) is None
+    assert run(gateway.access_token()) == "token-2"
+
+
+@pytest.mark.parametrize("case", MINI_APP_TOKEN["tokens"], ids=lambda case: case["body"])
+def test_wave_pay_mini_app_tokens(mode: str, case: dict[str, Any]) -> None:
+    cache = TtlCache()
+    server = FakeServer((case.get("status", 200), case["body"]))
+    gateway = mini_app(mode, MINI_APP_TOKEN["config"], server, cache)
+    assert run(gateway.access_token()) == case["token"]
+    assert cache.ttl == case["ttl"]
+
+
+@pytest.mark.parametrize(
+    "case", MINI_APP_TOKEN["errors"], ids=lambda case: f"{case['status']} {case['body']}"
+)
+def test_wave_pay_mini_app_token_errors(mode: str, case: dict[str, Any]) -> None:
+    server = FakeServer((case["status"], case["body"]))
+    gateway = mini_app(mode, MINI_APP_TOKEN["config"], server)
+    with pytest.raises(ApiError) as info:
+        run(gateway.access_token())
+    assert_api_error(info, case)
+    assert info.value.http_status == case["status"]
+
+
+MINI_APP_PAYMENT = VECTORS["wave_pay_mini_app_payment"]
+
+
+@pytest.mark.parametrize("case", MINI_APP_PAYMENT["cases"], ids=lambda case: case["name"])
+def test_wave_pay_mini_app_payment(mode: str, case: dict[str, Any]) -> None:
+    config = MINI_APP_PAYMENT["config"]
+    server = FakeServer()
+    payment = mini_app(mode, config, server).payment(mini_app_data(case["data"]))
+    assert isinstance(payment, MiniAppPayment)
+    assert payment.hash_value == hmac_hex(case["hash_input"], config["secret_key"])
+    assert payment.to_dict() == case["payload"]
+    assert list(payment.to_dict()) == list(case["payload"])
+    assert payment.to_json() == case["json"]
+    assert server.requests == []
+
+
+def test_wave_pay_mini_app_exact_amount(mode: str) -> None:
+    config = MINI_APP_PAYMENT["config"]
+    exact = MINI_APP_PAYMENT["exact_amount"]
+    payment = mini_app(mode, config, FakeServer()).payment(mini_app_data(exact["data"]))
+    assert str(payment.amount) == exact["amount_json"]
+    assert payment.hash_value == exact["hash"]
+    assert hmac_hex(exact["hash_input"], config["secret_key"]) == exact["hash"]
+    assert payment.to_json() == exact["json"]
+
+
+@pytest.mark.parametrize("value", MINI_APP_PAYMENT["generated_reference"]["values"], ids=repr)
+def test_wave_pay_mini_app_generated_reference(mode: str, value: str | None) -> None:
+    generated = MINI_APP_PAYMENT["generated_reference"]
+    data = mini_app_data({**generated["data"], "merchant_reference_id": value})
+    payment = mini_app(mode, MINI_APP_PAYMENT["config"], FakeServer()).payment(data)
+    assert re.search(generated["pattern"], payment.merchant_reference_id)
+    assert data.merchant_reference_id == payment.merchant_reference_id
+
+
+MINI_APP_VALIDATION = VECTORS["wave_pay_mini_app_validation"]
+
+
+@pytest.mark.parametrize("case", MINI_APP_VALIDATION["cases"], ids=lambda case: case["name"])
+def test_wave_pay_mini_app_validation(mode: str, case: dict[str, Any]) -> None:
+    data = mini_app_data({**MINI_APP_VALIDATION["data"], **case["data"]})
+    gateway = mini_app(mode, MINI_APP_PAYMENT["config"], FakeServer())
+    assert found(gateway.payment, data) == snake_errors(case["errors"])

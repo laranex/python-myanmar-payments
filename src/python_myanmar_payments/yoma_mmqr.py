@@ -4,18 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import inspect
-import re
 import threading
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar
 
 import httpx
 
 from ._amount import AmountInput, to_amount
-from ._cache import AsyncTokenCache, MemoryTokenCache, TokenCache
+from ._cache import AnyTokenCache, MemoryTokenCache, TokenCache
+from ._cache import resolve as _resolve
 from ._callback import CallbackRequest, lossless_body
 from ._errors import ApiError, SignatureVerificationError
 from ._http import (
@@ -40,6 +39,7 @@ from ._support import (
     require_setting,
     safe_equal,
     sha256_hex,
+    token_ttl,
     trim_url,
     utc_now,
 )
@@ -152,9 +152,6 @@ _STATUSES: Mapping[str, PaymentStatus] = {
     "FAILED": PaymentStatus.FAILED,
     "FAIL": PaymentStatus.FAILED,
 }
-
-# The leading digits of expires_in after ASCII whitespace, like PHP's /^\s*([0-9]+)/.
-_LEADING_INT = re.compile(r"[ \t\n\r\x0b\x0c]*([0-9]+)")
 
 
 @dataclass(frozen=True)
@@ -329,9 +326,7 @@ class _YomaMmqrBase:
         token = get(body, "access_token")
         if not response.successful() or token == "":
             raise _api_error("token", response.status, body, get(body, "error"))
-        match = _LEADING_INT.match(get(body, "expires_in"))
-        expires_in = int(match.group(1)) if match else 0
-        return token, max(60, (expires_in if expires_in > 0 else 3600) - 60)
+        return token, token_ttl(get(body, "expires_in"))
 
     def _token_cache_key(self) -> str:
         digest = sha256_hex(f"{self.config.base_url}|{self.config.client_id}")
@@ -436,9 +431,6 @@ class YomaMmqr(_YomaMmqrBase, SyncGateway):
             return token
 
 
-AnyTokenCache = TokenCache | AsyncTokenCache
-
-
 class AsyncYomaMmqr(_YomaMmqrBase, AsyncGateway):
     """Yoma Bank MMQR with an async HTTP client. The same API as :class:`YomaMmqr`, awaited.
 
@@ -514,10 +506,3 @@ class AsyncYomaMmqr(_YomaMmqrBase, AsyncGateway):
             token, ttl = self._token(await self._transport.send(self._token_request()))
             await _resolve(self._cache.set(key, token, ttl))
             return token
-
-
-async def _resolve(value: Any) -> Any:
-    """Awaits ``value`` when a cache method returned an awaitable."""
-    if inspect.isawaitable(value):
-        return await cast("Any", value)
-    return value

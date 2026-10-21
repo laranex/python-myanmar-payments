@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "python-myanmar-payments"
 dynamic = ["version"]
-description = "Python SDK for Myanmar payment gateways: KBZ Pay, Wave Pay, AYA Pay, Yoma MMQR and CyberSource. Typed requests and results, exact amounts, sync and async clients."
+description = "Python SDK for Myanmar payment gateways: KBZ Pay, Wave Pay, Wave Pay Mini App, AYA Pay, Yoma MMQR and CyberSource. Typed requests and results, exact amounts, sync and async clients."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE.md"]
@@ -20,6 +20,7 @@ keywords = [
     "kbzpay",
     "wave-pay",
     "wavepay",
+    "wavepay-mini-app",
     "aya-pay",
     "yoma",
     "mmqr",

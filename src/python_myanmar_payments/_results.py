@@ -8,6 +8,8 @@ from datetime import datetime
 from html import escape
 from typing import Any, ClassVar, Literal
 
+from ._amount import Amount
+from ._json import dumps
 from ._status import PaymentFlow, PaymentStatus
 
 __all__ = [
@@ -15,6 +17,7 @@ __all__ = [
     "AppPayment",
     "FormField",
     "FormPayment",
+    "MiniAppPayment",
     "PaymentCallback",
     "PaymentResult",
     "PaymentStatusResult",
@@ -151,7 +154,56 @@ class AppPayment:
         }
 
 
-PaymentResult = RedirectPayment | FormPayment | QrPayment | AppPayment
+@dataclass(frozen=True, kw_only=True)
+class MiniAppPayment:
+    """Pass :meth:`to_dict` (or :meth:`to_json`) to your mini app page unchanged.
+
+    The page hands it to the wallet's JavaScript SDK (Wave Pay Mini App:
+    ``WaveJsSDK.paymentModule.makePayment(payload)``). No request is sent to the
+    gateway.
+    """
+
+    flow: ClassVar[Literal[PaymentFlow.MINI_APP]] = PaymentFlow.MINI_APP
+    order_id: str
+    """Your order ID (``orderID``)."""
+    amount: Amount
+    """The signed total, in whole kyat."""
+    mini_app_id: str
+    """The configured mini app ID (``miniAppID``)."""
+    merchant_reference_id: str
+    """Your reference for this attempt (``merchantRefID``)."""
+    callback_url: str
+    """The signed callback URL (``callBackUrl``)."""
+    hash_value: str
+    """The payload's hash (``hashValue``)."""
+    items: tuple[tuple[str, Amount], ...] = ()
+    """The line items as ``(name, amount)`` pairs."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Exactly the object ``makePayment`` takes, amounts as ``int`` with every digit.
+
+        Keys in Wave's order: ``amount``, ``miniAppID``, ``merchantRefID``,
+        ``orderID``, ``callBackUrl``, ``hashValue`` and ``items`` (``name`` and
+        ``amount`` each).
+        """
+        return {
+            "amount": int(self.amount.whole_part()),
+            "miniAppID": self.mini_app_id,
+            "merchantRefID": self.merchant_reference_id,
+            "orderID": self.order_id,
+            "callBackUrl": self.callback_url,
+            "hashValue": self.hash_value,
+            "items": [
+                {"name": name, "amount": int(amount.whole_part())} for name, amount in self.items
+            ],
+        }
+
+    def to_json(self) -> str:
+        """:meth:`to_dict` as compact JSON, with slashes and non-ASCII text unescaped."""
+        return dumps(self.to_dict())
+
+
+PaymentResult = RedirectPayment | FormPayment | QrPayment | AppPayment | MiniAppPayment
 """Returned when a payment is initiated. Each flow has its own class; check ``flow``."""
 
 

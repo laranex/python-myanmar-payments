@@ -56,6 +56,9 @@ class PaymentFlow(_StrEnum):
     """Show a QR code the customer scans with their wallet app."""
     APP = "app"
     """Hand a signed payload to your mobile app, which opens the wallet SDK."""
+    MINI_APP = "mini_app"
+    """Hand a signed payload to your mini app page, which passes it to the wallet's
+    JavaScript SDK."""
 
 
 def resolve_status(

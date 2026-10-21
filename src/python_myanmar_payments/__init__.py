@@ -1,7 +1,7 @@
 """Python SDK for Myanmar payment gateways.
 
-KBZ Pay, Wave Pay, AYA Pay, Yoma MMQR and CyberSource. Typed requests and
-results, exact amounts, sync and async clients.
+KBZ Pay, Wave Pay, Wave Pay Mini App, AYA Pay, Yoma MMQR and CyberSource.
+Typed requests and results, exact amounts, sync and async clients.
 """
 
 from ._amount import Amount, AmountInput
@@ -20,6 +20,7 @@ from ._results import (
     AppPayment,
     FormField,
     FormPayment,
+    MiniAppPayment,
     PaymentCallback,
     PaymentResult,
     PaymentStatusResult,
@@ -51,6 +52,14 @@ from .wave_pay import (
     WavePayItem,
     WavePayPaymentData,
 )
+from .wave_pay_mini_app import (
+    AsyncWavePayMiniApp,
+    WavePayMiniApp,
+    WavePayMiniAppConfig,
+    WavePayMiniAppItem,
+    WavePayMiniAppPaymentData,
+    WavePayMiniAppSigner,
+)
 from .yoma_mmqr import AsyncYomaMmqr, YomaMmqr, YomaMmqrConfig, YomaMmqrPaymentData
 
 __all__ = [
@@ -65,6 +74,7 @@ __all__ = [
     "AsyncMyanmarPayments",
     "AsyncTokenCache",
     "AsyncWavePay",
+    "AsyncWavePayMiniApp",
     "AsyncYomaMmqr",
     "AyaPay",
     "AyaPayConfig",
@@ -87,6 +97,7 @@ __all__ = [
     "KbzPayPaymentData",
     "KbzPaySigner",
     "MemoryTokenCache",
+    "MiniAppPayment",
     "MyanmarPayments",
     "PaymentCallback",
     "PaymentError",
@@ -102,6 +113,11 @@ __all__ = [
     "WavePay",
     "WavePayConfig",
     "WavePayItem",
+    "WavePayMiniApp",
+    "WavePayMiniAppConfig",
+    "WavePayMiniAppItem",
+    "WavePayMiniAppPaymentData",
+    "WavePayMiniAppSigner",
     "WavePayPaymentData",
     "YomaMmqr",
     "YomaMmqrConfig",

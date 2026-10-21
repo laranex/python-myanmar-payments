@@ -13,6 +13,7 @@ from python_myanmar_payments import (
     AsyncKbzPay,
     AsyncMyanmarPayments,
     AsyncWavePay,
+    AsyncWavePayMiniApp,
     AsyncYomaMmqr,
     AyaPay,
     AyaPayConfig,
@@ -25,6 +26,8 @@ from python_myanmar_payments import (
     MyanmarPayments,
     WavePay,
     WavePayConfig,
+    WavePayMiniApp,
+    WavePayMiniAppConfig,
     YomaMmqr,
     YomaMmqrConfig,
 )
@@ -43,6 +46,11 @@ ENV = {
     "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS": "300",
     "WAVE_PAY_BASE_URL": "https://payments.wavemoney.io",
     "WAVE_PAY_BASE_REDIRECT_URL": "https://payments.wavemoney.io",
+    "WAVE_PAY_MINI_APP_CLIENT_ID": "c",
+    "WAVE_PAY_MINI_APP_CLIENT_SECRET": "s",
+    "WAVE_PAY_MINI_APP_MINI_APP_ID": "m",
+    "WAVE_PAY_MINI_APP_SECRET_KEY": "k",
+    "WAVE_PAY_MINI_APP_BASE_URL": "https://api.wavemoney.io:8100",
     "AYA_PAY_APP_KEY": "a",
     "AYA_PAY_APP_SECRET": "s",
     "AYA_PAY_BASE_URL": "https://pgw.ayainnovation.com",
@@ -69,6 +77,9 @@ class TestMyanmarPayments:
             assert payments.kbz_pay().config.app_id == "kp1"
             assert isinstance(payments.wave_pay(), WavePay)
             assert payments.wave_pay() is payments.wave_pay()
+            assert isinstance(payments.wave_pay_mini_app(), WavePayMiniApp)
+            assert payments.wave_pay_mini_app() is payments.wave_pay_mini_app()
+            assert payments.wave_pay_mini_app().config.mini_app_id == "m"
             assert isinstance(payments.aya_pay(), AyaPay)
             assert payments.aya_pay() is payments.aya_pay()
             assert isinstance(payments.yoma_mmqr(), YomaMmqr)
@@ -95,6 +106,7 @@ class TestMyanmarPayments:
         payments = MyanmarPayments(
             kbz_pay=KbzPayConfig(**gateway_config("kbz_pay", app_id="a")),
             wave_pay=WavePayConfig(**gateway_config("wave_pay")),
+            wave_pay_mini_app=WavePayMiniAppConfig(**gateway_config("wave_pay_mini_app")),
             aya_pay=AyaPayConfig(**gateway_config("aya_pay")),
             yoma_mmqr=YomaMmqrConfig(**gateway_config("yoma_mmqr")),
             cyber_source=CyberSourceConfig(**gateway_config("cyber_source", profile_id="p")),
@@ -103,6 +115,7 @@ class TestMyanmarPayments:
         )
         assert payments.kbz_pay().config.app_id == "a"
         assert payments.yoma_mmqr()._cache is cache
+        assert payments.wave_pay_mini_app()._cache is cache
         assert payments.cyber_source().config.profile_id == "p"
         payments.close()
         assert not client.is_closed
@@ -116,6 +129,7 @@ class TestMyanmarPayments:
             wave_pay=gateway_config(
                 "wave_pay", merchant_name="n", time_to_live_seconds="300", timeout_seconds=30
             ),
+            wave_pay_mini_app=gateway_config("wave_pay_mini_app", mini_app_id="mm"),
             aya_pay=gateway_config("aya_pay", app_key="k", timeout_seconds=30),
             yoma_mmqr=gateway_config("yoma_mmqr", webhook_hash_key="h", timeout_seconds=30),
             cyber_source=gateway_config("cyber_source", profile_id="p"),
@@ -124,6 +138,7 @@ class TestMyanmarPayments:
         assert payments.kbz_pay().config.timeout_seconds == 30
         assert payments.kbz_pay().config.time_to_live_minutes == 15
         assert payments.wave_pay().config.merchant_name == "n"
+        assert payments.wave_pay_mini_app().config.mini_app_id == "mm"
         assert payments.aya_pay().config.app_key == "k"
         assert payments.yoma_mmqr().config.webhook_hash_key == "h"
         assert payments.cyber_source().config.profile_id == "p"
@@ -150,6 +165,7 @@ class TestMyanmarPayments:
         [
             ("kbz_pay", "kbz_pay", "app_id"),
             ("wave_pay", "wave_pay", "merchant_id"),
+            ("wave_pay_mini_app", "wave_pay_mini_app", "client_id"),
             ("aya_pay", "aya_pay", "app_key"),
             ("yoma_mmqr", "yoma_mmqr", "merchant_id"),
             ("cyber_source", "cyber_source", "profile_id"),
@@ -170,6 +186,8 @@ class TestAsyncMyanmarPayments:
                 assert payments.kbz_pay() is payments.kbz_pay()
                 assert isinstance(payments.wave_pay(), AsyncWavePay)
                 assert payments.wave_pay() is payments.wave_pay()
+                assert isinstance(payments.wave_pay_mini_app(), AsyncWavePayMiniApp)
+                assert payments.wave_pay_mini_app() is payments.wave_pay_mini_app()
                 assert isinstance(payments.aya_pay(), AsyncAyaPay)
                 assert payments.aya_pay() is payments.aya_pay()
                 assert isinstance(payments.yoma_mmqr(), AsyncYomaMmqr)
@@ -208,6 +226,8 @@ class TestAgentSkill:
             KbzPay,
             AsyncKbzPay,
             WavePay,
+            WavePayMiniApp,
+            AsyncWavePayMiniApp,
             AyaPay,
             YomaMmqr,
             CyberSource,
@@ -217,6 +237,7 @@ class TestAgentSkill:
             api.FormPayment,
             api.QrPayment,
             api.AppPayment,
+            api.MiniAppPayment,
             api.Amount,
             api.PaymentStatus,
             api.PaymentStatusResult,

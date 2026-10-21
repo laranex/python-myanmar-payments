@@ -3,6 +3,8 @@
     "secrets": {
         "kbz_pay_app_key": "test-key",
         "wave_pay_secret_key": "test-secret",
+        "wave_pay_mini_app_secret_key": "test-secret",
+        "wave_pay_mini_app_mini_app_id": "MINI456",
         "aya_pay_app_secret": "test-secret",
         "yoma_mmqr_webhook_hashkey": "test-hashkey",
         "yoma_mmqr_webhook_secret": "test-webhook-secret",
@@ -312,6 +314,268 @@
                 "expected": {
                     "valid": false,
                     "message": "Wave Pay callback hash verification failed."
+                }
+            }
+        ],
+        "wave_pay_mini_app": [
+            {
+                "name": "successful is successful; the amount is a JSON number hashed as its exact text",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"a09f4d987a1f399d1a7235ed46d65e1a347e85702441ccc7ce12a95b163affc5\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "1747198780",
+                    "status": "successful",
+                    "gateway_status": "successful",
+                    "gateway_reference": "17301730",
+                    "amount": "1000",
+                    "merchant_reference_id": "testdemo_1747198780"
+                }
+            },
+            {
+                "name": "processing is pending",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"a09f4d987a1f399d1a7235ed46d65e1a347e85702441ccc7ce12a95b163affc5\",\"transactionId\":\"17301730\",\"transactionStatus\":\"processing\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "1747198780",
+                    "status": "pending",
+                    "gateway_status": "processing",
+                    "gateway_reference": "17301730",
+                    "amount": "1000",
+                    "merchant_reference_id": "testdemo_1747198780"
+                }
+            },
+            {
+                "name": "failed is failed",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"a09f4d987a1f399d1a7235ed46d65e1a347e85702441ccc7ce12a95b163affc5\",\"transactionId\":\"17301730\",\"transactionStatus\":\"failed\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "1747198780",
+                    "status": "failed",
+                    "gateway_status": "failed",
+                    "gateway_reference": "17301730",
+                    "amount": "1000",
+                    "merchant_reference_id": "testdemo_1747198780"
+                }
+            },
+            {
+                "name": "the status is trimmed and matched case-insensitively",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"a09f4d987a1f399d1a7235ed46d65e1a347e85702441ccc7ce12a95b163affc5\",\"transactionId\":\"17301730\",\"transactionStatus\":\" Successful \"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "1747198780",
+                    "status": "successful",
+                    "gateway_status": "Successful",
+                    "gateway_reference": "17301730",
+                    "amount": "1000",
+                    "merchant_reference_id": "testdemo_1747198780"
+                }
+            },
+            {
+                "name": "an unknown status is unknown",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"a09f4d987a1f399d1a7235ed46d65e1a347e85702441ccc7ce12a95b163affc5\",\"transactionId\":\"17301730\",\"transactionStatus\":\"PAYMENT_COMPLETED\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "1747198780",
+                    "status": "unknown",
+                    "gateway_status": "PAYMENT_COMPLETED",
+                    "gateway_reference": "17301730",
+                    "amount": "1000",
+                    "merchant_reference_id": "testdemo_1747198780"
+                }
+            },
+            {
+                "name": "an amount sent as text hashes the same",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":\"1000\",\"msisdn\":\"9444050894\",\"hashValue\":\"a09f4d987a1f399d1a7235ed46d65e1a347e85702441ccc7ce12a95b163affc5\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "1747198780",
+                    "status": "successful",
+                    "gateway_status": "successful",
+                    "gateway_reference": "17301730",
+                    "amount": "1000",
+                    "merchant_reference_id": "testdemo_1747198780"
+                }
+            },
+            {
+                "name": "the hash is compared case-insensitively",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"A09F4D987A1F399D1A7235ED46D65E1A347E85702441CCC7CE12A95B163AFFC5\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "1747198780",
+                    "status": "successful",
+                    "gateway_status": "successful",
+                    "gateway_reference": "17301730",
+                    "amount": "1000",
+                    "merchant_reference_id": "testdemo_1747198780"
+                }
+            },
+            {
+                "name": "a tampered amount fails",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":5000,\"msisdn\":\"9444050894\",\"hashValue\":\"a09f4d987a1f399d1a7235ed46d65e1a347e85702441ccc7ce12a95b163affc5\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback hash verification failed."
+                }
+            },
+            {
+                "name": "a different callback URL fails",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/other/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"a09f4d987a1f399d1a7235ed46d65e1a347e85702441ccc7ce12a95b163affc5\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback hash verification failed."
+                }
+            },
+            {
+                "name": "a hash keyed with another secret fails",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"c368ff09c96d5220220d74b818d5182d9558544cfc10829365c198041bdc1d5c\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback hash verification failed."
+                }
+            },
+            {
+                "name": "a hash over another mini app id fails",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"0a920d765f7ca6548790d691929b6ad4a39703a889ab25498d24eef49d05c0ff\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback hash verification failed."
+                }
+            },
+            {
+                "name": "a missing hashValue fails",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback hash verification failed."
+                }
+            },
+            {
+                "name": "a non-string hashValue fails",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":true,\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback hash verification failed."
+                }
+            },
+            {
+                "name": "a nested value fails even in a field that is not hashed",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":{\"number\":\"9444050894\"},\"hashValue\":\"a09f4d987a1f399d1a7235ed46d65e1a347e85702441ccc7ce12a95b163affc5\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback hash verification failed."
+                }
+            },
+            {
+                "name": "a nested hashed value fails",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":[\"1747198780\"],\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"a09f4d987a1f399d1a7235ed46d65e1a347e85702441ccc7ce12a95b163affc5\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback hash verification failed."
+                }
+            },
+            {
+                "name": "an empty merchantRefId is malformed after the hash matches",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"\",\"orderId\":\"1747198780\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"c103e9e905dfca45aea0f41c9b0ef20e9301874d7658d269e454a1adebba28b7\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback is malformed."
+                }
+            },
+            {
+                "name": "an empty orderId is malformed after the hash matches",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"\",\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"3ed57cb34d180ef74ce4599f6200f3f6c7ec7fbde95af27a036f926de83fa28c\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback is malformed."
+                }
+            },
+            {
+                "name": "a decimal amount is malformed after the hash matches",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":\"1000.50\",\"msisdn\":\"9444050894\",\"hashValue\":\"bf1e6c44c979f906f752a91c9a57eb45df0b8483350f1ea33e837c0775b780d5\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback is malformed."
+                }
+            },
+            {
+                "name": "a negative amount is malformed after the hash matches",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":-1000,\"msisdn\":\"9444050894\",\"hashValue\":\"caa6a082107207e62d32e5828b7a8709f0c159b43f9459e8e7b2634cdf5810a7\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback is malformed."
+                }
+            },
+            {
+                "name": "a number keeps its exact text (1000.0 is hashed as 1000.0, then malformed)",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":\"1747198780\",\"amount\":1000.0,\"msisdn\":\"9444050894\",\"hashValue\":\"7e7e74ee468bc6e89042a12d0b99f45ec202aa5eec01eb6370ef475477ab2575\",\"transactionId\":\"17301730\",\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback is malformed."
+                }
+            },
+            {
+                "name": "a numeric orderId hashes as its exact text",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "{\"merchantRefId\":\"testdemo_1747198780\",\"orderId\":1747198780,\"amount\":1000,\"msisdn\":\"9444050894\",\"hashValue\":\"a09f4d987a1f399d1a7235ed46d65e1a347e85702441ccc7ce12a95b163affc5\",\"transactionId\":17301730,\"transactionStatus\":\"successful\"}",
+                "expected": {
+                    "valid": true,
+                    "order_id": "1747198780",
+                    "status": "successful",
+                    "gateway_status": "successful",
+                    "gateway_reference": "17301730",
+                    "amount": "1000",
+                    "merchant_reference_id": "testdemo_1747198780"
+                }
+            },
+            {
+                "name": "an empty body fails",
+                "content_type": "application/json",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "body": "",
+                "expected": {
+                    "valid": false,
+                    "message": "Wave Pay Mini App callback hash verification failed."
                 }
             }
         ],
@@ -875,6 +1139,11 @@
             "WAVE_PAY_TIME_TO_LIVE_IN_SECONDS": "300",
             "WAVE_PAY_BASE_URL": "https://payments.wavemoney.io",
             "WAVE_PAY_BASE_REDIRECT_URL": "https://payments.wavemoney.io",
+            "WAVE_PAY_MINI_APP_CLIENT_ID": "client",
+            "WAVE_PAY_MINI_APP_CLIENT_SECRET": "client-secret",
+            "WAVE_PAY_MINI_APP_MINI_APP_ID": "MINI456",
+            "WAVE_PAY_MINI_APP_SECRET_KEY": "test-secret",
+            "WAVE_PAY_MINI_APP_BASE_URL": "https://api.wavemoney.io:8100",
             "AYA_PAY_APP_KEY": "app-key",
             "AYA_PAY_APP_SECRET": "test-secret",
             "AYA_PAY_BASE_URL": "https://pgw.ayainnovation.com",
@@ -904,6 +1173,9 @@
                 "base_url": "https://payments.wavemoney.io",
                 "base_redirect_url": "https://payments.wavemoney.io"
             },
+            "wave_pay_mini_app": {
+                "base_url": "https://api.wavemoney.io:8100"
+            },
             "aya_pay": {
                 "base_url": "https://pgw.ayainnovation.com"
             },
@@ -920,6 +1192,7 @@
                 "KBZ_PAY_PWA_BASE_REDIRECT_URL": "https://static.kbzpay.com/pgw/uat/pwa/#/",
                 "WAVE_PAY_BASE_URL": "https://preprodpayments.wavemoney.io:8107",
                 "WAVE_PAY_BASE_REDIRECT_URL": "https://preprodpayments.wavemoney.io:8107",
+                "WAVE_PAY_MINI_APP_BASE_URL": "https://preprodnewapi.wavemoney.io/",
                 "AYA_PAY_BASE_URL": "https://uat-pgw.ayainnovation.com",
                 "YOMA_MMQR_BASE_URL": "https://devapi.yomabank.net",
                 "CYBER_SOURCE_BASE_URL": "https://testsecureacceptance.cybersource.com"
@@ -932,6 +1205,9 @@
                 "wave_pay": {
                     "base_url": "https://preprodpayments.wavemoney.io:8107",
                     "base_redirect_url": "https://preprodpayments.wavemoney.io:8107"
+                },
+                "wave_pay_mini_app": {
+                    "base_url": "https://preprodnewapi.wavemoney.io"
                 },
                 "aya_pay": {
                     "base_url": "https://uat-pgw.ayainnovation.com"
@@ -1420,6 +1696,90 @@
                 "value": "   ",
                 "key": "base_url",
                 "message": "The yoma_mmqr configuration is missing [base_url]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "WAVE_PAY_MINI_APP_CLIENT_ID",
+                "value": null,
+                "key": "client_id",
+                "message": "The wave_pay_mini_app configuration is missing [client_id]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "WAVE_PAY_MINI_APP_CLIENT_ID",
+                "value": "   ",
+                "key": "client_id",
+                "message": "The wave_pay_mini_app configuration is missing [client_id]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "WAVE_PAY_MINI_APP_CLIENT_SECRET",
+                "value": null,
+                "key": "client_secret",
+                "message": "The wave_pay_mini_app configuration is missing [client_secret]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "WAVE_PAY_MINI_APP_CLIENT_SECRET",
+                "value": "   ",
+                "key": "client_secret",
+                "message": "The wave_pay_mini_app configuration is missing [client_secret]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "WAVE_PAY_MINI_APP_MINI_APP_ID",
+                "value": null,
+                "key": "mini_app_id",
+                "message": "The wave_pay_mini_app configuration is missing [mini_app_id]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "WAVE_PAY_MINI_APP_MINI_APP_ID",
+                "value": "   ",
+                "key": "mini_app_id",
+                "message": "The wave_pay_mini_app configuration is missing [mini_app_id]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "WAVE_PAY_MINI_APP_SECRET_KEY",
+                "value": null,
+                "key": "secret_key",
+                "message": "The wave_pay_mini_app configuration is missing [secret_key]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "WAVE_PAY_MINI_APP_SECRET_KEY",
+                "value": "   ",
+                "key": "secret_key",
+                "message": "The wave_pay_mini_app configuration is missing [secret_key]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "WAVE_PAY_MINI_APP_BASE_URL",
+                "value": null,
+                "key": "base_url",
+                "message": "The wave_pay_mini_app configuration is missing [base_url]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "WAVE_PAY_MINI_APP_BASE_URL",
+                "value": "   ",
+                "key": "base_url",
+                "message": "The wave_pay_mini_app configuration is missing [base_url]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "0",
+                "key": "timeout_in_seconds",
+                "message": "The wave_pay_mini_app configuration [timeout_in_seconds] must be a whole number greater than 0."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "variable": "MYANMAR_PAYMENTS_HTTP_TIMEOUT",
+                "value": "abc",
+                "key": "timeout_in_seconds",
+                "message": "The wave_pay_mini_app configuration [timeout_in_seconds] must be a whole number greater than 0."
             }
         ],
         "default_timeout": {
@@ -1706,7 +2066,7 @@
             }
         ]
     },
-    "callbacks_source": "Every callback case: expected.valid false means the SDK throws its signature verification error with exactly expected.message. Decoding errors, nested values, non-string signature fields and a signature, hash or checksum mismatch give \"<Gateway> <thing> <signature|hash|checksum> verification failed.\"; checks that run after the signature matched give \"Wave Pay callback is malformed.\", \"AYA Pay {context} payload is malformed.\" or \"CyberSource callback is malformed.\". A missing amount or gateway_reference means none.",
+    "callbacks_source": "Every callback case: expected.valid false means the SDK throws its signature verification error with exactly expected.message. Decoding errors, nested values, non-string signature fields and a signature, hash or checksum mismatch give \"<Gateway> <thing> <signature|hash|checksum> verification failed.\"; checks that run after the signature matched give \"Wave Pay callback is malformed.\", \"Wave Pay Mini App callback is malformed.\", \"AYA Pay {context} payload is malformed.\" or \"CyberSource callback is malformed.\". A missing amount or gateway_reference means none. Wave Pay Mini App cases use secrets.wave_pay_mini_app_secret_key and secrets.wave_pay_mini_app_mini_app_id and pass callback_url to handleCallback (the hash is HMAC-SHA256 over amount . orderId . miniAppId . merchantRefId . callbackUrl, amount as its exact JSON text); expected.merchant_reference_id is the callback's merchantRefId (in raw).",
     "url_validation": {
         "source": "Every callback, return and cancel URL is checked like PHP FILTER_VALIDATE_URL plus an http/https scheme: printable ASCII only (no whitespace or control characters), \"http://\" or \"https://\" in any case followed by a host; the host is a bracketed IP literal or dot-separated labels of letters, digits and inner \"-\" (1 to 63 characters each, at most 253 in all, one trailing dot allowed); a port is 0 to 65535. User info, path, query and fragment may hold any printable ASCII. An invalid URL gives message for the field.",
         "field": "callbackUrl",
@@ -2198,7 +2558,7 @@
         ]
     },
     "config_validation_order": {
-        "source": "When several settings are wrong, the first error is the same everywhere: the required strings in the order config.errors lists them, then the time to live (missing, not a whole number, out of range), then the HTTP timeout. Each case applies env over config.env (null removes the variable).",
+        "source": "When several settings are wrong, the first error is the same everywhere: the required strings in the order config.errors lists them, then the time to live (missing, not a whole number, out of range), then the HTTP timeout. Wave Pay Mini App checks client_id, client_secret, mini_app_id, secret_key, base_url, then the timeout. Each case applies env over config.env (null removes the variable).",
         "cases": [
             {
                 "gateway": "kbz_pay",
@@ -2280,6 +2640,35 @@
                 },
                 "key": "base_url",
                 "message": "The yoma_mmqr configuration is missing [base_url]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "env": {
+                    "WAVE_PAY_MINI_APP_BASE_URL": null,
+                    "WAVE_PAY_MINI_APP_SECRET_KEY": " ",
+                    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "abc"
+                },
+                "key": "secret_key",
+                "message": "The wave_pay_mini_app configuration is missing [secret_key]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "env": {
+                    "WAVE_PAY_MINI_APP_BASE_URL": null,
+                    "WAVE_PAY_MINI_APP_CLIENT_ID": null,
+                    "WAVE_PAY_MINI_APP_MINI_APP_ID": null
+                },
+                "key": "client_id",
+                "message": "The wave_pay_mini_app configuration is missing [client_id]."
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "env": {
+                    "WAVE_PAY_MINI_APP_BASE_URL": null,
+                    "MYANMAR_PAYMENTS_HTTP_TIMEOUT": "-1"
+                },
+                "key": "base_url",
+                "message": "The wave_pay_mini_app configuration is missing [base_url]."
             }
         ]
     },
@@ -2381,6 +2770,28 @@
                 "errors": {
                     "amount": "The amount field must not be negative.",
                     "currency": "The currency field may only contain a three letter ISO 4217 code."
+                }
+            },
+            {
+                "gateway": "wave_pay_mini_app",
+                "data": {
+                    "order_id": "",
+                    "callback_url": "https://shop.test/cb",
+                    "items": [
+                        [
+                            "A",
+                            10
+                        ],
+                        [
+                            "B",
+                            -5
+                        ]
+                    ],
+                    "merchant_reference_id": "ref-001"
+                },
+                "errors": {
+                    "orderId": "The orderId field is required.",
+                    "items.1.amount": "The items.1.amount field must not be negative."
                 }
             }
         ]
@@ -2562,6 +2973,462 @@
             "items": "[{\"name\":\"Big\",\"amount\":99999999999999999999},{\"name\":\"Small\",\"amount\":1}]",
             "hash": "63b55324acf5ec923da26e3d42947481e7b3b4eac15cfd985b5b404f14b230a7"
         }
+    },
+    "wave_pay_mini_app_token": {
+        "source": "Wave Money JS SDK spec v1.8, section 2.2: the access token is a form post (Content-Type application/x-www-form-urlencoded, Accept application/json) of client_id, client_secret and grant_type=client_credentials to {base_url}/auth/v1/external-utility/token; the response is {token_type, access_token, expires_in}. access_token is read as text (a number is its digits; empty, missing or nested is no token). The token is cached under cache_key (myanmar-payments.wave-pay-mini-app.token.<sha256 of \"<base url>|<client id>\">) for max(60, (expires_in > 0 ? expires_in : 3600) - 60) seconds, expires_in read by its leading digits; a second accessToken() call is served from the cache and forgetToken() drops it. A failed request (non-2xx, not JSON or no token) throws the API error \"Wave Pay Mini App token request failed: [{error}] {message}\" (trailing space trimmed) when error is non-empty text, else \"Wave Pay Mini App token request failed with HTTP {status}.\"; the message is error_description, or message when that is empty; \"\" is none. Each case uses this config.",
+        "config": {
+            "client_id": "client",
+            "client_secret": "s3cr3t+/= x",
+            "mini_app_id": "MINI456",
+            "secret_key": "test-secret",
+            "base_url": "https://preprodnewapi.wavemoney.io"
+        },
+        "response": {
+            "status": 200,
+            "body": "{\"token_type\":\"Bearer\",\"access_token\":\"token-1\",\"expires_in\":300}"
+        },
+        "expected": {
+            "method": "POST",
+            "url": "https://preprodnewapi.wavemoney.io/auth/v1/external-utility/token",
+            "headers": {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "application/json"
+            },
+            "form": {
+                "client_id": "client",
+                "client_secret": "s3cr3t+/= x",
+                "grant_type": "client_credentials"
+            },
+            "body": "client_id=client&client_secret=s3cr3t%2B%2F%3D+x&grant_type=client_credentials",
+            "token": "token-1",
+            "cache_key": "myanmar-payments.wave-pay-mini-app.token.9bb067ebf98c28cf63ae423e8170dca330cb6ce756222470a1c579256ffdc51a",
+            "ttl": 240
+        },
+        "tokens": [
+            {
+                "body": "{\"access_token\":12345,\"expires_in\":300}",
+                "token": "12345",
+                "ttl": 240
+            },
+            {
+                "body": "{\"access_token\":\"t\",\"expires_in\":28800}",
+                "token": "t",
+                "ttl": 28740
+            },
+            {
+                "body": "{\"access_token\":\"t\",\"expires_in\":0}",
+                "token": "t",
+                "ttl": 3540
+            },
+            {
+                "body": "{\"access_token\":\"t\"}",
+                "token": "t",
+                "ttl": 3540
+            },
+            {
+                "body": "{\"access_token\":\"t\",\"expires_in\":30}",
+                "token": "t",
+                "ttl": 60
+            },
+            {
+                "body": "{\"access_token\":\"t\",\"expires_in\":\"300.0\"}",
+                "token": "t",
+                "ttl": 240
+            },
+            {
+                "body": "{\"access_token\":\"t\",\"expires_in\":\"soon\"}",
+                "token": "t",
+                "ttl": 3540
+            },
+            {
+                "status": 201,
+                "body": "{\"access_token\":\"t\",\"error\":\"ignored\"}",
+                "token": "t",
+                "ttl": 3540
+            }
+        ],
+        "errors": [
+            {
+                "status": 401,
+                "body": "{\"error\":\"invalid_client\",\"error_description\":\"Bad client\"}",
+                "message": "Wave Pay Mini App token request failed: [invalid_client] Bad client",
+                "gateway_code": "invalid_client",
+                "gateway_message": "Bad client"
+            },
+            {
+                "status": 400,
+                "body": "{\"error\":\"invalid_request\"}",
+                "message": "Wave Pay Mini App token request failed: [invalid_request]",
+                "gateway_code": "invalid_request",
+                "gateway_message": null
+            },
+            {
+                "status": 403,
+                "body": "{\"error\":\"denied\",\"error_description\":\"\",\"message\":\"Not allowed\"}",
+                "message": "Wave Pay Mini App token request failed: [denied] Not allowed",
+                "gateway_code": "denied",
+                "gateway_message": "Not allowed"
+            },
+            {
+                "status": 401,
+                "body": "{\"message\":\"Unauthorized\"}",
+                "message": "Wave Pay Mini App token request failed with HTTP 401.",
+                "gateway_code": null,
+                "gateway_message": "Unauthorized"
+            },
+            {
+                "status": 400,
+                "body": "{\"error\":\"\",\"error_description\":\"Bad client\"}",
+                "message": "Wave Pay Mini App token request failed with HTTP 400.",
+                "gateway_code": null,
+                "gateway_message": "Bad client"
+            },
+            {
+                "status": 500,
+                "body": "Server Error",
+                "message": "Wave Pay Mini App token request failed with HTTP 500.",
+                "gateway_code": null,
+                "gateway_message": null
+            },
+            {
+                "status": 200,
+                "body": "{\"token_type\":\"Bearer\",\"expires_in\":300}",
+                "message": "Wave Pay Mini App token request failed with HTTP 200.",
+                "gateway_code": null,
+                "gateway_message": null
+            },
+            {
+                "status": 200,
+                "body": "{\"access_token\":\"\",\"expires_in\":300}",
+                "message": "Wave Pay Mini App token request failed with HTTP 200.",
+                "gateway_code": null,
+                "gateway_message": null
+            },
+            {
+                "status": 200,
+                "body": "{\"access_token\":[\"t\"],\"expires_in\":300}",
+                "message": "Wave Pay Mini App token request failed with HTTP 200.",
+                "gateway_code": null,
+                "gateway_message": null
+            }
+        ]
+    },
+    "wave_pay_mini_app_payment": {
+        "source": "Wave Money JS SDK spec v1.8, section 8.3: payment() sends no request; it returns the object for WaveJsSDK.paymentModule.makePayment, exactly {amount, miniAppID, merchantRefID, orderID, callBackUrl, hashValue, items: [{name, amount}]} in that key order, amounts as JSON integers. hashValue is the lowercase hex HMAC-SHA256 of hash_input (amount . orderID . miniAppID . merchantRefID . callBackUrl, no separator) keyed with secret_key. data keys are the snake_case payment data fields; an item is [name, amount] where a string amount is parsed as a decimal; payload is the object (toArray / toJSON) and json its exact compact text (no escaped slashes or non-ASCII characters). A missing or empty merchant_reference_id is generated: generated_reference.pattern.",
+        "config": {
+            "client_id": "client",
+            "client_secret": "client-secret",
+            "mini_app_id": "MINI456",
+            "secret_key": "test-secret",
+            "base_url": "https://preprodnewapi.wavemoney.io"
+        },
+        "cases": [
+            {
+                "name": "Wave's example: 5000ORDER123MINI456MERCHANT789https://yourdomain.com/callback",
+                "data": {
+                    "order_id": "ORDER123",
+                    "callback_url": "https://yourdomain.com/callback",
+                    "items": [
+                        [
+                            "Ticket",
+                            5000
+                        ]
+                    ],
+                    "amount": 5000,
+                    "merchant_reference_id": "MERCHANT789"
+                },
+                "hash_input": "5000ORDER123MINI456MERCHANT789https://yourdomain.com/callback",
+                "payload": {
+                    "amount": 5000,
+                    "miniAppID": "MINI456",
+                    "merchantRefID": "MERCHANT789",
+                    "orderID": "ORDER123",
+                    "callBackUrl": "https://yourdomain.com/callback",
+                    "hashValue": "aae8c2959c7d5c4995bcdeb6ec4aa6e4f34fbd7607d039436991f901ed883f6c",
+                    "items": [
+                        {
+                            "name": "Ticket",
+                            "amount": 5000
+                        }
+                    ]
+                },
+                "json": "{\"amount\":5000,\"miniAppID\":\"MINI456\",\"merchantRefID\":\"MERCHANT789\",\"orderID\":\"ORDER123\",\"callBackUrl\":\"https://yourdomain.com/callback\",\"hashValue\":\"aae8c2959c7d5c4995bcdeb6ec4aa6e4f34fbd7607d039436991f901ed883f6c\",\"items\":[{\"name\":\"Ticket\",\"amount\":5000}]}"
+            },
+            {
+                "name": "the amount defaults to the exact sum of the items",
+                "data": {
+                    "order_id": "ORDER_1",
+                    "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                    "items": [
+                        [
+                            "A",
+                            1000
+                        ],
+                        [
+                            "B",
+                            2500
+                        ]
+                    ],
+                    "merchant_reference_id": "ref-001"
+                },
+                "hash_input": "3500ORDER_1MINI456ref-001https://shop.test/wave-pay-mini-app/callback",
+                "payload": {
+                    "amount": 3500,
+                    "miniAppID": "MINI456",
+                    "merchantRefID": "ref-001",
+                    "orderID": "ORDER_1",
+                    "callBackUrl": "https://shop.test/wave-pay-mini-app/callback",
+                    "hashValue": "42557d5e55f43ccad936fb1010628c669cee543cbe5d7fc7593eb05e733cc752",
+                    "items": [
+                        {
+                            "name": "A",
+                            "amount": 1000
+                        },
+                        {
+                            "name": "B",
+                            "amount": 2500
+                        }
+                    ]
+                },
+                "json": "{\"amount\":3500,\"miniAppID\":\"MINI456\",\"merchantRefID\":\"ref-001\",\"orderID\":\"ORDER_1\",\"callBackUrl\":\"https://shop.test/wave-pay-mini-app/callback\",\"hashValue\":\"42557d5e55f43ccad936fb1010628c669cee543cbe5d7fc7593eb05e733cc752\",\"items\":[{\"name\":\"A\",\"amount\":1000},{\"name\":\"B\",\"amount\":2500}]}"
+            },
+            {
+                "name": "text is written as JSON with slashes and non-ASCII characters unescaped",
+                "data": {
+                    "order_id": "Order 1/2",
+                    "callback_url": "https://shop.test/cb?a=1&b=<2>",
+                    "items": [
+                        [
+                            "လက်မှတ် \"VIP\" & <more>",
+                            1500
+                        ]
+                    ],
+                    "amount": 1500,
+                    "merchant_reference_id": "ref/ü"
+                },
+                "hash_input": "1500Order 1/2MINI456ref/ühttps://shop.test/cb?a=1&b=<2>",
+                "payload": {
+                    "amount": 1500,
+                    "miniAppID": "MINI456",
+                    "merchantRefID": "ref/ü",
+                    "orderID": "Order 1/2",
+                    "callBackUrl": "https://shop.test/cb?a=1&b=<2>",
+                    "hashValue": "47d417b764734803bd19a3601b5c2e7e805b0ef672ebaf7cad42f1ddc57b4ef1",
+                    "items": [
+                        {
+                            "name": "လက်မှတ် \"VIP\" & <more>",
+                            "amount": 1500
+                        }
+                    ]
+                },
+                "json": "{\"amount\":1500,\"miniAppID\":\"MINI456\",\"merchantRefID\":\"ref/ü\",\"orderID\":\"Order 1/2\",\"callBackUrl\":\"https://shop.test/cb?a=1&b=<2>\",\"hashValue\":\"47d417b764734803bd19a3601b5c2e7e805b0ef672ebaf7cad42f1ddc57b4ef1\",\"items\":[{\"name\":\"လက်မှတ် \\\"VIP\\\" & <more>\",\"amount\":1500}]}"
+            }
+        ],
+        "exact_amount": {
+            "data": {
+                "order_id": "ORDER_1",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "items": [
+                    [
+                        "Big",
+                        "99999999999999999999"
+                    ],
+                    [
+                        "Small",
+                        "1"
+                    ]
+                ],
+                "merchant_reference_id": "ref-001"
+            },
+            "amount_json": "100000000000000000000",
+            "hash_input": "100000000000000000000ORDER_1MINI456ref-001https://shop.test/wave-pay-mini-app/callback",
+            "hash": "7945255cfd789b1ea8f7dee0b5f702c3d9c9962cf364983c511d0af0ea81b319",
+            "json": "{\"amount\":100000000000000000000,\"miniAppID\":\"MINI456\",\"merchantRefID\":\"ref-001\",\"orderID\":\"ORDER_1\",\"callBackUrl\":\"https://shop.test/wave-pay-mini-app/callback\",\"hashValue\":\"7945255cfd789b1ea8f7dee0b5f702c3d9c9962cf364983c511d0af0ea81b319\",\"items\":[{\"name\":\"Big\",\"amount\":99999999999999999999},{\"name\":\"Small\",\"amount\":1}]}"
+        },
+        "generated_reference": {
+            "data": {
+                "order_id": "ORDER_1",
+                "callback_url": "https://shop.test/wave-pay-mini-app/callback",
+                "items": [
+                    [
+                        "A",
+                        1000
+                    ]
+                ]
+            },
+            "values": [
+                null,
+                ""
+            ],
+            "pattern": "^[0-9a-f]{32}$"
+        }
+    },
+    "wave_pay_mini_app_validation": {
+        "source": "Wave Pay Mini App payment data rules. Each case applies data over this data (snake_case field names; an item is [name, amount] where a string amount is parsed as a decimal); errors lists the fields in validation order: orderId, callbackUrl, items, merchantReferenceId, then each item's name and amount, then amount. Amounts are whole kyat greater than 0; without amount the total is the exact sum of the items: no items gives \"The amount field is required.\", and an item amount that is invalid or has decimals skips the total check. Wave gives no length or character limits, so none are checked.",
+        "data": {
+            "order_id": "ORDER_1",
+            "merchant_reference_id": "ref-001",
+            "callback_url": "https://shop.test/cb",
+            "items": [
+                [
+                    "A",
+                    1000
+                ]
+            ]
+        },
+        "cases": [
+            {
+                "name": "valid",
+                "data": {},
+                "errors": {}
+            },
+            {
+                "name": "no length or character limits",
+                "data": {
+                    "order_id": "Order #1 / xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                    "merchant_reference_id": "ref 1/yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+                    "items": [
+                        [
+                            "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+                            1000
+                        ]
+                    ]
+                },
+                "errors": {}
+            },
+            {
+                "name": "no items and no amount",
+                "data": {
+                    "items": []
+                },
+                "errors": {
+                    "items": "The items field must have at least one item.",
+                    "amount": "The amount field is required."
+                }
+            },
+            {
+                "name": "no items with an amount",
+                "data": {
+                    "items": [],
+                    "amount": 1000
+                },
+                "errors": {
+                    "items": "The items field must have at least one item."
+                }
+            },
+            {
+                "name": "an item amount with decimals skips the total",
+                "data": {
+                    "items": [
+                        [
+                            "A",
+                            "0.5"
+                        ]
+                    ]
+                },
+                "errors": {
+                    "items.0.amount": "Wave Pay Mini App does not accept decimal amounts; the items.0.amount field must be a whole number."
+                }
+            },
+            {
+                "name": "a negative item amount skips the total",
+                "data": {
+                    "items": [
+                        [
+                            "A",
+                            10
+                        ],
+                        [
+                            "B",
+                            -1
+                        ]
+                    ]
+                },
+                "errors": {
+                    "items.1.amount": "The items.1.amount field must not be negative."
+                }
+            },
+            {
+                "name": "items that sum to zero",
+                "data": {
+                    "items": [
+                        [
+                            "A",
+                            0
+                        ]
+                    ]
+                },
+                "errors": {
+                    "items.0.amount": "The items.0.amount field must be greater than 0.",
+                    "amount": "The amount field must be greater than 0."
+                }
+            },
+            {
+                "name": "a given amount with decimals",
+                "data": {
+                    "amount": "10.5"
+                },
+                "errors": {
+                    "amount": "Wave Pay Mini App does not accept decimal amounts; the amount field must be a whole number."
+                }
+            },
+            {
+                "name": "a negative given amount",
+                "data": {
+                    "amount": -1
+                },
+                "errors": {
+                    "amount": "The amount field must not be negative."
+                }
+            },
+            {
+                "name": "a zero given amount",
+                "data": {
+                    "amount": 0
+                },
+                "errors": {
+                    "amount": "The amount field must be greater than 0."
+                }
+            },
+            {
+                "name": "a given amount need not equal the items",
+                "data": {
+                    "amount": 999
+                },
+                "errors": {}
+            },
+            {
+                "name": "an empty callback URL",
+                "data": {
+                    "callback_url": ""
+                },
+                "errors": {
+                    "callbackUrl": "The callbackUrl field is required."
+                }
+            },
+            {
+                "name": "every field in order",
+                "data": {
+                    "order_id": " ",
+                    "callback_url": "x",
+                    "items": [
+                        [
+                            "",
+                            0
+                        ]
+                    ],
+                    "merchant_reference_id": " "
+                },
+                "errors": {
+                    "orderId": "The orderId field is required.",
+                    "callbackUrl": "The callbackUrl field must be a valid http or https URL.",
+                    "merchantReferenceId": "The merchantReferenceId field is required.",
+                    "items.0.name": "The items.0.name field is required.",
+                    "items.0.amount": "The items.0.amount field must be greater than 0.",
+                    "amount": "The amount field must be greater than 0."
+                }
+            }
+        ]
     },
     "wave_pay_errors": {
         "source": "A failed Wave Pay payment request throws the API error \"Wave Pay payment request failed with HTTP {status}: {gateway_message}\". Field errors count only when errors is a JSON object: \"field: messages\" pairs sorted by field and joined with \"; \", each entry a list of messages (joined with \" \") or a single one, objects skipped; otherwise message, or \"unexpected response\". gateway_code is VALIDATION_ERROR whenever the errors key is present (even null), else message. Uses wave_pay_request.config and wave_pay_limits.data.",

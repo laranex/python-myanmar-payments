@@ -1,10 +1,11 @@
-"""Access token caches (used by Yoma MMQR)."""
+"""Access token caches (used by Yoma MMQR and Wave Pay Mini App)."""
 
 from __future__ import annotations
 
+import inspect
 import threading
 import time
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 __all__ = ["AsyncTokenCache", "MemoryTokenCache", "TokenCache"]
 
@@ -30,7 +31,8 @@ class TokenCache(Protocol):
 class AsyncTokenCache(Protocol):
     """A :class:`TokenCache` with coroutine methods, e.g. on ``redis.asyncio``.
 
-    Only :class:`~python_myanmar_payments.AsyncYomaMmqr` accepts it.
+    Only :class:`~python_myanmar_payments.AsyncYomaMmqr` and
+    :class:`~python_myanmar_payments.AsyncWavePayMiniApp` accept it.
     """
 
     async def get(self, key: str) -> str | None:
@@ -78,3 +80,14 @@ class MemoryTokenCache:
         """Removes every entry."""
         with self._lock:
             self._items.clear()
+
+
+AnyTokenCache = TokenCache | AsyncTokenCache
+"""A sync or an async token cache, as the async clients accept."""
+
+
+async def resolve(value: Any) -> Any:
+    """Awaits ``value`` when a cache method returned an awaitable."""
+    if inspect.isawaitable(value):
+        return await cast("Any", value)
+    return value

@@ -267,7 +267,7 @@ class TestPaymentStatus:
         assert PaymentStatus.CANCELED == "canceled"  # type: ignore[comparison-overlap]
         assert str(PaymentStatus.CANCELED) == "canceled"
         assert f"{PaymentStatus.EXPIRED:>8}" == " expired"
-        assert [flow.value for flow in PaymentFlow] == ["redirect", "form", "qr", "app"]
+        assert [flow.value for flow in PaymentFlow] == ["redirect", "form", "qr", "app", "mini_app"]
 
     def test_resolves_gateway_statuses(self) -> None:
         statuses = {"OK": PaymentStatus.SUCCESSFUL}

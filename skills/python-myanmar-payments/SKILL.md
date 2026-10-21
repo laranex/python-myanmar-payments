@@ -1,7 +1,7 @@
 ---
 name: python-myanmar-payments
 description: >
-  Integrate Myanmar payment gateways (KBZ Pay, Wave Pay, AYA Pay, Yoma MMQR, CyberSource) in a Python app (Django, Flask, FastAPI or plain Python) with python-myanmar-payments.
+  Integrate Myanmar payment gateways (KBZ Pay, Wave Pay, Wave Pay Mini App, AYA Pay, Yoma MMQR, CyberSource) in a Python app (Django, Flask, FastAPI or plain Python) with python-myanmar-payments.
 license: MIT
 metadata:
   author: Nay Thu Khant
@@ -11,7 +11,7 @@ metadata:
 
 ## When to use
 
-Use this skill when a Python app takes payments through KBZ Pay, Wave Pay, AYA Payment Gateway, Yoma MMQR or CyberSource. Start payments and verify callbacks with the package's typed API; never build gateway signatures by hand. It works the same in Django, Flask, FastAPI or plain Python.
+Use this skill when a Python app takes payments through KBZ Pay, Wave Pay, Wave Pay Mini App (a web page running inside the WavePay app), AYA Payment Gateway, Yoma MMQR or CyberSource. Start payments and verify callbacks with the package's typed API; never build gateway signatures by hand. It works the same in Django, Flask, FastAPI or plain Python.
 
 ## Install
 
@@ -19,29 +19,30 @@ Use this skill when a Python app takes payments through KBZ Pay, Wave Pay, AYA P
 pip install python-myanmar-payments
 ```
 
-Requires Python 3.10+ and depends only on `httpx`. Import everything from `python_myanmar_payments`. Every gateway that calls an API has a sync class (`KbzPay`, `WavePay`, `AyaPay`, `YomaMmqr`) and an async twin (`AsyncKbzPay`, `AsyncWavePay`, `AsyncAyaPay`, `AsyncYomaMmqr`) with the same methods, awaited; use the async ones inside an event loop. `CyberSource` makes no network calls and serves both.
+Requires Python 3.10+ and depends only on `httpx`. Import everything from `python_myanmar_payments`. Every gateway that calls an API has a sync class (`KbzPay`, `WavePay`, `WavePayMiniApp`, `AyaPay`, `YomaMmqr`) and an async twin (`AsyncKbzPay`, `AsyncWavePay`, `AsyncWavePayMiniApp`, `AsyncAyaPay`, `AsyncYomaMmqr`) with the same methods, awaited; use the async ones inside an event loop. `CyberSource` makes no network calls and serves both.
 
 ## Configure
 
-`MyanmarPayments.from_env()` reads `KBZ_PAY_*`, `WAVE_PAY_*`, `AYA_PAY_*`, `YOMA_MMQR_*` and `CYBER_SOURCE_*` plus `MYANMAR_PAYMENTS_HTTP_TIMEOUT` from `os.environ` (the same variables as the PHP, Go and Node SDKs). Every setting of a gateway you use is required and has no default, except the HTTP timeout in seconds (`MYANMAR_PAYMENTS_HTTP_TIMEOUT`, for every gateway except CyberSource), which defaults to 30 (`DEFAULT_TIMEOUT_SECONDS`). That includes the URLs (production's or the gateway's UAT ones, with matching credentials; the config classes' `PRODUCTION_*` constants name production's), the time to live (`KBZ_PAY_TIME_TO_LIVE_IN_MINUTES`, 1 to 120; `WAVE_PAY_TIME_TO_LIVE_IN_SECONDS`, greater than 0; a payment's `time_to_live_minutes` / `time_to_live_seconds` overrides them), `YOMA_MMQR_WEBHOOK_SECRET` (every Yoma callback must carry it in `X-Webhook-Secret`), `WAVE_PAY_MERCHANT_NAME` and `YOMA_MMQR_API_VERSION` (e.g. `v1rc`).
+`MyanmarPayments.from_env()` reads `KBZ_PAY_*`, `WAVE_PAY_*`, `WAVE_PAY_MINI_APP_*`, `AYA_PAY_*`, `YOMA_MMQR_*` and `CYBER_SOURCE_*` plus `MYANMAR_PAYMENTS_HTTP_TIMEOUT` from `os.environ` (the same variables as the PHP, Go and Node SDKs). Every setting of a gateway you use is required and has no default, except the HTTP timeout in seconds (`MYANMAR_PAYMENTS_HTTP_TIMEOUT`, for every gateway except CyberSource), which defaults to 30 (`DEFAULT_TIMEOUT_SECONDS`). That includes the URLs (production's or the gateway's UAT ones, with matching credentials; the config classes' `PRODUCTION_*` constants name production's), the time to live (`KBZ_PAY_TIME_TO_LIVE_IN_MINUTES`, 1 to 120; `WAVE_PAY_TIME_TO_LIVE_IN_SECONDS`, greater than 0; a payment's `time_to_live_minutes` / `time_to_live_seconds` overrides them), `YOMA_MMQR_WEBHOOK_SECRET` (every Yoma callback must carry it in `X-Webhook-Secret`), `WAVE_PAY_MERCHANT_NAME`, `YOMA_MMQR_API_VERSION` (e.g. `v1rc`) and Wave Pay Mini App's `WAVE_PAY_MINI_APP_CLIENT_ID`, `WAVE_PAY_MINI_APP_CLIENT_SECRET`, `WAVE_PAY_MINI_APP_MINI_APP_ID`, `WAVE_PAY_MINI_APP_SECRET_KEY` and `WAVE_PAY_MINI_APP_BASE_URL`.
 
 ```python
 from python_myanmar_payments import MyanmarPayments
 
 payments = MyanmarPayments.from_env()  # create once, share across requests
-kbz = payments.kbz_pay()  # also wave_pay(), aya_pay(), yoma_mmqr(), cyber_source()
+# Also wave_pay(), wave_pay_mini_app(), aya_pay(), yoma_mmqr() and cyber_source().
+kbz = payments.kbz_pay()
 ```
 
 - Or build one gateway: `KbzPay(KbzPayConfig(app_id=..., app_key=..., merchant_code=..., api_url=KbzPayConfig.PRODUCTION_API_URL, pwa_url=KbzPayConfig.PRODUCTION_PWA_URL, time_to_live_minutes=15))` (add `timeout_seconds=` to change the 30-second default), `KbzPay.from_env()` or `KbzPay(KbzPayConfig.from_env())`; in async code use `AsyncMyanmarPayments.from_env()` and `AsyncKbzPay`.
 - Or pass the settings directly: gateways and `MyanmarPayments(kbz_pay={"app_id": ..., "app_key": ..., "merchant_code": ..., "api_url": ..., "pwa_url": ..., "time_to_live_minutes": 15, "timeout_seconds": 30})` take config objects or mappings of their keyword arguments (other keys are ignored, so one shared mapping can configure several gateways; credentials may be text or integers, e.g. `"merchant_code": 200123`).
-- Options (keyword arguments): `http_client` (your own `httpx.Client` / `httpx.AsyncClient`) (it keeps its own timeout; without one the gateway creates a client whose `timeout_seconds` is one overall deadline per request, connecting and reading included); close the clients the package created with `payments.close()` / `await payments.aclose()` or a `with` block. Yoma and the facades also take `token_cache` (any `TokenCache`, default `MemoryTokenCache`; `AsyncYomaMmqr`/`AsyncMyanmarPayments` also take an `AsyncTokenCache`; back it with Redis when you run several processes).
+- Options (keyword arguments): `http_client` (your own `httpx.Client` / `httpx.AsyncClient`) (it keeps its own timeout; without one the gateway creates a client whose `timeout_seconds` is one overall deadline per request, connecting and reading included); close the clients the package created with `payments.close()` / `await payments.aclose()` or a `with` block. Yoma, Wave Pay Mini App and the facades also take `token_cache` for the access token (any `TokenCache`, default `MemoryTokenCache`; `AsyncYomaMmqr`, `AsyncWavePayMiniApp` and `AsyncMyanmarPayments` also take an `AsyncTokenCache`; back it with Redis when you run several processes).
 - A missing setting raises `ConfigurationError` (`gateway`, `key`), and a time setting that is not a whole number from 1 to 2147483647 raises it too (an unset or blank timeout falls back to 30 seconds; `"0"` or `"2.5"` is still an error). Settings are checked in a fixed order (credentials, URLs, time to live, then the timeout) and only ASCII whitespace is trimmed.
 
 ## Use
 
 ### Amounts
 
-Amounts are `Amount.kyat(1000)`, `Amount.parse("1000.50")`, a whole `int`, decimal text or a `Decimal`; never a float such as `10.5`. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave, AYA and Yoma take whole kyat. Invalid data raises `InvalidPaymentDataError` with `errors` per field (`order_id`, `amount`, ...), before any request is sent; a negative amount is reported as `The amount field must not be negative.` with the other errors. Callback, return and cancel URLs must be plain ASCII `http://` or `https://` URLs with a valid host name or bracketed IP (no spaces, no `_` or non-ASCII host names). Compare a gateway's amount by value with `amount.equals(callback.amount)`.
+Amounts are `Amount.kyat(1000)`, `Amount.parse("1000.50")`, a whole `int`, decimal text or a `Decimal`; never a float such as `10.5`. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave Pay, Wave Pay Mini App, AYA and Yoma take whole kyat. Invalid data raises `InvalidPaymentDataError` with `errors` per field (`order_id`, `amount`, ...), before any request is sent; a negative amount is reported as `The amount field must not be negative.` with the other errors. Callback, return and cancel URLs must be plain ASCII `http://` or `https://` URLs with a valid host name or bracketed IP (no spaces, no `_` or non-ASCII host names). Compare a gateway's amount by value with `amount.equals(callback.amount)`.
 
 ### Start a payment
 
@@ -64,6 +65,26 @@ return redirect(payment.url)
 - `FormPayment` from `aya.initiate(data)` and `cyber_source.initiate(data)` (no network call, never awaited): return `payment.to_html()` as an auto-submitting page (`payment.to_html(nonce)` adds your Content Security Policy nonce to its inline script; an empty nonce adds none), or render `action`, `fields` and `enctype` yourself.
 - `QrPayment` from `kbz.qr(data)` (encode `qr_string`) and `yoma.initiate(data)` (`qr_image_data_uri()`, `expires_at`, `reference`). A Yoma QR lives `YomaMmqr.QR_LIFETIME_SECONDS` (120); renew it with `yoma.renew_qr(order_id)`.
 - `AppPayment` from `kbz.app(data)`: send `payment.to_dict()` (`orderId`, `orderInfo`, `sign`, `signType`) to your mobile app.
+- `MiniAppPayment` from `mini_app.payment(data)` (no network call, never awaited): send `payment.to_dict()` (or `payment.to_json()`) to your mini app page, which passes it unchanged to `WaveJsSDK.paymentModule.makePayment(payload)`. It is exactly Wave's object: `amount`, `miniAppID`, `merchantRefID`, `orderID`, `callBackUrl`, `hashValue`, `items`.
+
+Wave Pay Mini App runs your web page inside the WavePay app. Your server gives the page `mini_app.access_token()` (cached; awaited on `AsyncWavePayMiniApp`; the page calls `WaveJsSDK.authModule.loginWithAccessToken(token)`; never request the token from the browser, it needs the client secret), then signs the payment:
+
+```python
+from python_myanmar_payments import WavePayMiniAppItem, WavePayMiniAppPaymentData
+
+mini_app = payments.wave_pay_mini_app()
+payment = mini_app.payment(
+    WavePayMiniAppPaymentData(
+        order_id="ORDER_1",
+        callback_url="https://shop.test/payments/wave-pay-mini-app/callback",
+        items=[WavePayMiniAppItem("Ticket", 5000)],  # amount defaults to the items' sum
+    )
+)
+# Send it as JSON; the page calls WaveJsSDK.paymentModule.makePayment(payload).
+return payment.to_dict()
+```
+
+`merchant_reference_id` is generated when empty (32 hex characters) and written back to the data; store it with the order.
 
 AYA needs a channel: `aya.services()` lists `AyaPayService` entries (`key`, `supports(method)`), then `aya.initiate(AyaPayPaymentData(order_id="ORDER123", amount=1000, channel="kbz_pay", method=AyaPayMethod.QR))`. AYA's `order_id`, `description` and `user_refs` must not contain `:`.
 
@@ -92,12 +113,13 @@ return HttpResponse(ack.body, status=ack.status, headers=ack.headers)
 - Give the package the raw body bytes, the headers and the query string; `handle_callback()` and `verify_redirect()` are plain methods on the async classes too.
 - `SignatureVerificationError` covers both a bad signature (`... verification failed.`) and a signed callback with malformed values (`... is malformed.`); answer both with a 400.
 - Check AYA's browser return with `aya.verify_redirect(request)`.
+- Wave Pay Mini App callbacks carry neither the mini app ID nor the callback URL, so pass the callback URL the payment was signed with: `mini_app.handle_callback(request, "https://shop.test/payments/wave-pay-mini-app/callback")`. `successful` is `SUCCESSFUL`, `processing` is `PENDING`, `failed` is `FAILED`; `merchantRefId` is in `callback.raw`. Wave expects an empty 200.
 - Yoma MMQR signs only the order number and status, so its callback has no `amount`: match the order number to your stored order (its QR was generated for the stored amount) and, to confirm, call `yoma.status(reference)` with that order's QR reference (`refLabel`). The status result has no amount either, so trust your stored amount.
 - For production, store the verified callback, acknowledge immediately, then process it once in the background.
 
 ### Check status and handle errors
 
-- `kbz.status(order_id)`, `aya.status(order_id)` and `yoma.status(reference)` return `PaymentStatusResult` with `status` and `is_successful()`. Wave Pay and CyberSource have no status API.
+- `kbz.status(order_id)`, `aya.status(order_id)` and `yoma.status(reference)` return `PaymentStatusResult` with `status` and `is_successful()`. Wave Pay, Wave Pay Mini App and CyberSource have no status API.
 - Statuses: `PaymentStatus.SUCCESSFUL`, `PENDING`, `FAILED`, `CANCELED`, `EXPIRED`, `UNKNOWN`; `status.is_final()`.
 - Redirects are never followed: a 3xx response is a failure like any other non-2xx one.
 - Gateway failures raise `ApiError` (`gateway_code`, `gateway_message`, `http_status`, `raw`; network errors are chained as `__cause__`). All errors extend `PaymentError`.
@@ -114,5 +136,6 @@ return HttpResponse(ack.body, status=ack.status, headers=ack.headers)
 - Treating `PENDING` or `UNKNOWN` as paid.
 - Passing floats or `float(price)` as amounts; use `Amount.parse()` or a `Decimal`.
 - Building the `CallbackRequest` from `request.json` / `request.POST` instead of the raw body.
+- Requesting the Wave Pay Mini App access token or computing its hash in the browser (both need secrets).
 - Reusing a Wave `merchant_reference_id`, or calling Yoma `initiate()` twice for one order (use `renew_qr()`).
 - Opening a KBZ Pay PWA link outside a phone with the KBZ Pay app.
