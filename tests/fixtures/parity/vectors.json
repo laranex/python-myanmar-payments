@@ -1172,6 +1172,341 @@
         "enctype": "multipart/form-data",
         "html": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Redirecting to payment</title></head><body><form id=\"payment-form\" method=\"POST\" action=\"https://pay.test/?a=&#34;b&#34;&amp;c=&#39;d&#39;\" enctype=\"multipart/form-data\"><input type=\"hidden\" name=\"name\" value=\"&lt;x&gt;\"><input type=\"hidden\" name=\"note\" value=\"&#34;quoted&#34; &amp; &#39;single&#39;\"><noscript><button type=\"submit\">Continue to payment</button></noscript></form><script>document.getElementById(\"payment-form\").submit();</script></body></html>"
     },
+    "cyber_source_hosted_checkout": {
+        "source": "CyberSource Secure Acceptance Hosted Checkout (not the Checkout API's /silent/pay): hostedCheckout() (Go HostedCheckout(), Python hosted_checkout()) signs the payment fields without a network call and returns a FormPayment (flow form) whose action is base_url's /pay. Each case applies data over data (snake_case field names, transaction_type the CyberSourceTransactionType value, amount parsed as a decimal). fields lists every form field in order; a null value is generated per payment: transaction_uuid matches patterns.transaction_uuid, signed_date_time is the current UTC time matching patterns.signed_date_time, and signature is the base64 HMAC-SHA256, keyed with config.secret_key, of the signed_field_names fields as name=value pairs joined with \",\". override_custom_receipt_page (return_url) and override_custom_cancel_page (cancel_url) are sent and signed only when set (not null or empty); override_backoffice_post_url (callback_url) is always sent. order_id_limits: reference_number is at most 40 characters (Asia, Middle East, and Africa Gateway: String (40)); error null means valid, otherwise the only error is error on orderId.",
+        "config": {
+            "profile_id": "profile-1",
+            "access_key": "access-1",
+            "secret_key": "test-secret",
+            "base_url": "https://testsecureacceptance.cybersource.com"
+        },
+        "data": {
+            "order_id": "ORDER_1",
+            "amount": "1000.50",
+            "callback_url": "https://shop.test/cs/callback",
+            "currency": "MMK",
+            "transaction_type": "sale",
+            "locale": "en-us"
+        },
+        "action": "https://testsecureacceptance.cybersource.com/pay",
+        "patterns": {
+            "transaction_uuid": "^[0-9a-f]{32}$",
+            "signed_date_time": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "cases": [
+            {
+                "name": "unset return and cancel URLs are left out",
+                "data": {},
+                "signed_field_names": "access_key,profile_id,transaction_uuid,signed_field_names,signed_date_time,locale,transaction_type,reference_number,amount,currency,override_backoffice_post_url",
+                "fields": [
+                    [
+                        "access_key",
+                        "access-1"
+                    ],
+                    [
+                        "profile_id",
+                        "profile-1"
+                    ],
+                    [
+                        "transaction_uuid",
+                        null
+                    ],
+                    [
+                        "signed_field_names",
+                        "access_key,profile_id,transaction_uuid,signed_field_names,signed_date_time,locale,transaction_type,reference_number,amount,currency,override_backoffice_post_url"
+                    ],
+                    [
+                        "signed_date_time",
+                        null
+                    ],
+                    [
+                        "locale",
+                        "en-us"
+                    ],
+                    [
+                        "transaction_type",
+                        "sale"
+                    ],
+                    [
+                        "reference_number",
+                        "ORDER_1"
+                    ],
+                    [
+                        "amount",
+                        "1000.50"
+                    ],
+                    [
+                        "currency",
+                        "MMK"
+                    ],
+                    [
+                        "override_backoffice_post_url",
+                        "https://shop.test/cs/callback"
+                    ],
+                    [
+                        "signature",
+                        null
+                    ]
+                ]
+            },
+            {
+                "name": "empty return and cancel URLs are left out",
+                "data": {
+                    "return_url": "",
+                    "cancel_url": ""
+                },
+                "signed_field_names": "access_key,profile_id,transaction_uuid,signed_field_names,signed_date_time,locale,transaction_type,reference_number,amount,currency,override_backoffice_post_url",
+                "fields": [
+                    [
+                        "access_key",
+                        "access-1"
+                    ],
+                    [
+                        "profile_id",
+                        "profile-1"
+                    ],
+                    [
+                        "transaction_uuid",
+                        null
+                    ],
+                    [
+                        "signed_field_names",
+                        "access_key,profile_id,transaction_uuid,signed_field_names,signed_date_time,locale,transaction_type,reference_number,amount,currency,override_backoffice_post_url"
+                    ],
+                    [
+                        "signed_date_time",
+                        null
+                    ],
+                    [
+                        "locale",
+                        "en-us"
+                    ],
+                    [
+                        "transaction_type",
+                        "sale"
+                    ],
+                    [
+                        "reference_number",
+                        "ORDER_1"
+                    ],
+                    [
+                        "amount",
+                        "1000.50"
+                    ],
+                    [
+                        "currency",
+                        "MMK"
+                    ],
+                    [
+                        "override_backoffice_post_url",
+                        "https://shop.test/cs/callback"
+                    ],
+                    [
+                        "signature",
+                        null
+                    ]
+                ]
+            },
+            {
+                "name": "a return URL alone is sent and signed",
+                "data": {
+                    "return_url": "https://shop.test/done"
+                },
+                "signed_field_names": "access_key,profile_id,transaction_uuid,signed_field_names,signed_date_time,locale,transaction_type,reference_number,amount,currency,override_custom_receipt_page,override_backoffice_post_url",
+                "fields": [
+                    [
+                        "access_key",
+                        "access-1"
+                    ],
+                    [
+                        "profile_id",
+                        "profile-1"
+                    ],
+                    [
+                        "transaction_uuid",
+                        null
+                    ],
+                    [
+                        "signed_field_names",
+                        "access_key,profile_id,transaction_uuid,signed_field_names,signed_date_time,locale,transaction_type,reference_number,amount,currency,override_custom_receipt_page,override_backoffice_post_url"
+                    ],
+                    [
+                        "signed_date_time",
+                        null
+                    ],
+                    [
+                        "locale",
+                        "en-us"
+                    ],
+                    [
+                        "transaction_type",
+                        "sale"
+                    ],
+                    [
+                        "reference_number",
+                        "ORDER_1"
+                    ],
+                    [
+                        "amount",
+                        "1000.50"
+                    ],
+                    [
+                        "currency",
+                        "MMK"
+                    ],
+                    [
+                        "override_custom_receipt_page",
+                        "https://shop.test/done"
+                    ],
+                    [
+                        "override_backoffice_post_url",
+                        "https://shop.test/cs/callback"
+                    ],
+                    [
+                        "signature",
+                        null
+                    ]
+                ]
+            },
+            {
+                "name": "a cancel URL alone is sent and signed",
+                "data": {
+                    "cancel_url": "https://shop.test/cancel"
+                },
+                "signed_field_names": "access_key,profile_id,transaction_uuid,signed_field_names,signed_date_time,locale,transaction_type,reference_number,amount,currency,override_backoffice_post_url,override_custom_cancel_page",
+                "fields": [
+                    [
+                        "access_key",
+                        "access-1"
+                    ],
+                    [
+                        "profile_id",
+                        "profile-1"
+                    ],
+                    [
+                        "transaction_uuid",
+                        null
+                    ],
+                    [
+                        "signed_field_names",
+                        "access_key,profile_id,transaction_uuid,signed_field_names,signed_date_time,locale,transaction_type,reference_number,amount,currency,override_backoffice_post_url,override_custom_cancel_page"
+                    ],
+                    [
+                        "signed_date_time",
+                        null
+                    ],
+                    [
+                        "locale",
+                        "en-us"
+                    ],
+                    [
+                        "transaction_type",
+                        "sale"
+                    ],
+                    [
+                        "reference_number",
+                        "ORDER_1"
+                    ],
+                    [
+                        "amount",
+                        "1000.50"
+                    ],
+                    [
+                        "currency",
+                        "MMK"
+                    ],
+                    [
+                        "override_backoffice_post_url",
+                        "https://shop.test/cs/callback"
+                    ],
+                    [
+                        "override_custom_cancel_page",
+                        "https://shop.test/cancel"
+                    ],
+                    [
+                        "signature",
+                        null
+                    ]
+                ]
+            },
+            {
+                "name": "return and cancel URLs are sent and signed",
+                "data": {
+                    "return_url": "https://shop.test/done",
+                    "cancel_url": "https://shop.test/cancel"
+                },
+                "signed_field_names": "access_key,profile_id,transaction_uuid,signed_field_names,signed_date_time,locale,transaction_type,reference_number,amount,currency,override_custom_receipt_page,override_backoffice_post_url,override_custom_cancel_page",
+                "fields": [
+                    [
+                        "access_key",
+                        "access-1"
+                    ],
+                    [
+                        "profile_id",
+                        "profile-1"
+                    ],
+                    [
+                        "transaction_uuid",
+                        null
+                    ],
+                    [
+                        "signed_field_names",
+                        "access_key,profile_id,transaction_uuid,signed_field_names,signed_date_time,locale,transaction_type,reference_number,amount,currency,override_custom_receipt_page,override_backoffice_post_url,override_custom_cancel_page"
+                    ],
+                    [
+                        "signed_date_time",
+                        null
+                    ],
+                    [
+                        "locale",
+                        "en-us"
+                    ],
+                    [
+                        "transaction_type",
+                        "sale"
+                    ],
+                    [
+                        "reference_number",
+                        "ORDER_1"
+                    ],
+                    [
+                        "amount",
+                        "1000.50"
+                    ],
+                    [
+                        "currency",
+                        "MMK"
+                    ],
+                    [
+                        "override_custom_receipt_page",
+                        "https://shop.test/done"
+                    ],
+                    [
+                        "override_backoffice_post_url",
+                        "https://shop.test/cs/callback"
+                    ],
+                    [
+                        "override_custom_cancel_page",
+                        "https://shop.test/cancel"
+                    ],
+                    [
+                        "signature",
+                        null
+                    ]
+                ]
+            }
+        ],
+        "order_id_limits": [
+            {
+                "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "error": null
+            },
+            {
+                "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "error": "The orderId field must not be greater than 40 characters."
+            }
+        ]
+    },
     "messages": {
         "invalid_payment_data": {
             "errors": {
@@ -2253,20 +2588,20 @@
             {
                 "gateway": "cyber_source",
                 "field": "orderId",
-                "value": "မမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမ",
+                "value": "မမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမ",
                 "error": null
             },
             {
                 "gateway": "cyber_source",
                 "field": "orderId",
-                "value": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+                "value": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
                 "error": null
             },
             {
                 "gateway": "cyber_source",
                 "field": "orderId",
-                "value": "မမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမ",
-                "error": "The orderId field must not be greater than 50 characters."
+                "value": "မမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမမ",
+                "error": "The orderId field must not be greater than 40 characters."
             }
         ]
     },

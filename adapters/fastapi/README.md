@@ -154,7 +154,7 @@ async def pay(order_id: str, kbz: KbzPayDep) -> RedirectResponse:
 
 Don't retry a failed initiation automatically: the gateway may have created the payment before the error reached you. Check `kbz.status(order_id)` (KBZ Pay, AYA Pay; Yoma MMQR by QR reference) or let the customer try again with a new attempt where the gateway requires one (Wave Pay's `merchant_reference_id`).
 
-`AyaPay.initiate()` and `CyberSource.initiate()` make no network call and return a `FormPayment`; return `HTMLResponse(payment.to_html())`.
+`AyaPay.initiate()` and `CyberSource.hosted_checkout()` make no network call and return a `FormPayment`; return `HTMLResponse(payment.to_html())`.
 
 ## Secure webhooks
 

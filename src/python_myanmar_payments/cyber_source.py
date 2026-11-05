@@ -1,4 +1,4 @@
-"""CyberSource Secure Acceptance hosted checkout for card payments."""
+"""CyberSource Secure Acceptance Hosted Checkout for card payments."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ __all__ = [
 
 
 class CyberSourceConfig:
-    """A CyberSource Secure Acceptance profile.
+    """A CyberSource Secure Acceptance Hosted Checkout profile.
 
     Every setting is required; a missing or blank one raises a
     :class:`~python_myanmar_payments.ConfigurationError`. :attr:`PRODUCTION_URL`
@@ -107,11 +107,11 @@ _TRANSACTION_TYPES = frozenset(kind.value for kind in CyberSourceTransactionType
 
 @dataclass(kw_only=True)
 class CyberSourcePaymentData:
-    """A Secure Acceptance card payment. CyberSource is multi-currency."""
+    """A Secure Acceptance Hosted Checkout card payment. CyberSource is multi-currency."""
 
     order_id: str
-    """Your order ID (``reference_number``), at most 50 characters. Echoed back as
-    ``req_reference_number``."""
+    """Your order ID (``reference_number``), at most 40 characters (the Asia, Middle
+    East, and Africa Gateway's limit). Echoed back as ``req_reference_number``."""
     amount: AmountInput
     """The total in ``currency``: 0 or more, any decimals, at most 15 characters, e.g.
     ``Amount.parse("10.50")``."""
@@ -125,10 +125,11 @@ class CyberSourcePaymentData:
     locale: str
     """The hosted page language, e.g. ``en-us``."""
     return_url: str | None = None
-    """The receipt page (``override_custom_receipt_page``), at most 255 characters."""
+    """The receipt page (``override_custom_receipt_page``), at most 255 characters.
+    Left out when unset."""
     cancel_url: str | None = None
     """The page shown on cancel (``override_custom_cancel_page``), at most 255
-    characters."""
+    characters. Left out when unset."""
 
 
 _SIGNED_FIELDS = (
@@ -147,6 +148,9 @@ _SIGNED_FIELDS = (
     "override_custom_cancel_page",
 )
 
+_OPTIONAL_FIELDS = frozenset({"override_custom_receipt_page", "override_custom_cancel_page"})
+"""Optional override URLs, left out of the fields and ``signed_field_names`` when unset."""
+
 _STATUSES: Mapping[str, PaymentStatus] = {
     "ACCEPT": PaymentStatus.SUCCESSFUL,
     "REVIEW": PaymentStatus.PENDING,
@@ -160,7 +164,7 @@ _LOCALE = re.compile(r"[a-z]{2}-[a-z]{2}")
 
 
 class CyberSource:
-    """CyberSource Secure Acceptance hosted checkout for card payments.
+    """CyberSource Secure Acceptance Hosted Checkout for card payments.
 
     Signs the form and verifies the result posts. Makes no network calls, so the
     same class serves sync and async code.
@@ -186,7 +190,7 @@ class CyberSource:
         (
             Validator()
             .required("order_id", data.order_id)
-            .max("order_id", data.order_id, 50)
+            .max("order_id", data.order_id, 40)
             .amount(
                 "amount",
                 data.amount,
@@ -214,11 +218,17 @@ class CyberSource:
             .validate()
         )
 
-    def initiate(self, data: CyberSourcePaymentData) -> FormPayment:
-        """Signs the payment fields.
+    def hosted_checkout(self, data: CyberSourcePaymentData) -> FormPayment:
+        """Starts a Secure Acceptance Hosted Checkout payment: signs the payment fields.
 
-        The customer's browser must POST the returned form to CyberSource;
-        ``to_html()`` renders a page that does it.
+        No network call is made; the customer's browser must POST the returned form
+        to CyberSource's ``/pay`` page, and ``to_html()`` renders a page that does it.
+
+        ``override_custom_receipt_page`` (``return_url``) and
+        ``override_custom_cancel_page`` (``cancel_url``) are sent and signed only
+        when set (not ``None`` or empty); unset ones are left out, so the Secure
+        Acceptance profile's own pages apply. ``override_backoffice_post_url``
+        (``callback_url``) is always sent.
         """
         self.validate(data)
 
@@ -226,7 +236,7 @@ class CyberSource:
             "access_key": self.config.access_key,
             "profile_id": self.config.profile_id,
             "transaction_uuid": random_hex(),
-            "signed_field_names": ",".join(_SIGNED_FIELDS),
+            "signed_field_names": "",
             "signed_date_time": utc_now().strftime("%Y-%m-%dT%H:%M:%SZ"),
             "locale": data.locale,
             "transaction_type": str(data.transaction_type),
@@ -237,8 +247,10 @@ class CyberSource:
             "override_backoffice_post_url": data.callback_url,
             "override_custom_cancel_page": data.cancel_url or "",
         }
-        fields = [FormField(name, values[name]) for name in _SIGNED_FIELDS]
-        fields.append(FormField("signature", self._sign(values, _SIGNED_FIELDS) or ""))
+        names = [name for name in _SIGNED_FIELDS if values[name] or name not in _OPTIONAL_FIELDS]
+        values["signed_field_names"] = ",".join(names)
+        fields = [FormField(name, values[name]) for name in names]
+        fields.append(FormField("signature", self._sign(values, names) or ""))
 
         return FormPayment(
             order_id=data.order_id,

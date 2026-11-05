@@ -61,7 +61,7 @@ def result(**changes: str) -> dict[str, str]:
 
 class TestCyberSource:
     def test_signs_the_form_in_the_documented_field_order(self, clock: Clock) -> None:
-        payment = gateway.initiate(
+        payment = gateway.hosted_checkout(
             data(
                 return_url="https://shop.test/receipt",
                 cancel_url="https://shop.test/cancel",
@@ -91,12 +91,46 @@ class TestCyberSource:
         assert values["signature"] == sign(values)
 
     def test_sends_the_given_currency_locale_and_transaction_type(self) -> None:
-        values = gateway.initiate(data(amount=Decimal("0"))).values()
+        values = gateway.hosted_checkout(data(amount=Decimal("0"))).values()
         assert values["currency"] == "MMK"
         assert values["locale"] == "en-us"
         assert values["transaction_type"] == "sale"
-        assert values["override_custom_receipt_page"] == ""
+        assert "override_custom_receipt_page" not in values
         assert values["amount"] == "0"
+
+    @pytest.mark.parametrize(
+        ("return_url", "cancel_url", "expected"),
+        [
+            pytest.param(None, None, [], id="both unset"),
+            pytest.param("", "", [], id="both empty"),
+            pytest.param(
+                "https://shop.test/done", None, ["override_custom_receipt_page"], id="return only"
+            ),
+            pytest.param(
+                None, "https://shop.test/cancel", ["override_custom_cancel_page"], id="cancel only"
+            ),
+            pytest.param(
+                "https://shop.test/done",
+                "https://shop.test/cancel",
+                ["override_custom_receipt_page", "override_custom_cancel_page"],
+                id="both set",
+            ),
+        ],
+    )
+    def test_leaves_unset_return_and_cancel_urls_out(
+        self, return_url: str | None, cancel_url: str | None, expected: list[str]
+    ) -> None:
+        optional = {"override_custom_receipt_page", "override_custom_cancel_page"}
+        payment = gateway.hosted_checkout(data(return_url=return_url, cancel_url=cancel_url))
+        values = payment.values()
+        assert [field.name for field in payment.fields if field.name in optional] == expected
+        names = values["signed_field_names"].split(",")
+        assert [name for name in names if name in optional] == expected
+        assert values["override_backoffice_post_url"] == "https://shop.test/cs/callback"
+        assert values["signature"] == sign(values)
+
+    def test_accepts_an_order_id_of_40_characters(self) -> None:
+        assert gateway.hosted_checkout(data(order_id="A" * 40)).order_id == "A" * 40
 
     def test_verifies_a_signed_result_and_keeps_only_signed_fields(self) -> None:
         fields = {**result(), "decision_extra": "x", "req_card_number": "xxxx1111"}
@@ -215,7 +249,7 @@ class TestCyberSource:
         ("change", "field"),
         [
             ({"order_id": ""}, "order_id"),
-            ({"order_id": "O" * 51}, "order_id"),
+            ({"order_id": "O" * 41}, "order_id"),
             ({"amount": "1234567890123.50"}, "amount"),
             ({"amount": -1}, "amount"),
             ({"amount": object()}, "amount"),
@@ -251,7 +285,7 @@ class TestCyberSource:
         }
 
     def test_accepts_plain_transaction_type_strings(self) -> None:
-        payment = gateway.initiate(data(transaction_type="sale,create_payment_token"))
+        payment = gateway.hosted_checkout(data(transaction_type="sale,create_payment_token"))
         assert payment.field("transaction_type") == "sale,create_payment_token"
 
 

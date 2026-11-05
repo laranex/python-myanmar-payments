@@ -25,6 +25,7 @@ from python_myanmar_payments import (
     CyberSource,
     CyberSourceConfig,
     CyberSourcePaymentData,
+    CyberSourceTransactionType,
     FormField,
     FormPayment,
     InvalidPaymentDataError,
@@ -48,7 +49,7 @@ from python_myanmar_payments import (
     YomaMmqrPaymentData,
 )
 from python_myanmar_payments._validate import Validator
-from tests.helpers import FakeServer, fixture, gateway_config, hmac_hex, make, run
+from tests.helpers import FakeServer, fixture, gateway_config, hmac_base64, hmac_hex, make, run
 
 VECTORS = fixture("parity/vectors.json")
 SECRETS: dict[str, str] = VECTORS["secrets"]
@@ -248,6 +249,52 @@ def test_form_html() -> None:
         enctype=vector["enctype"],
     )
     assert payment.to_html() == vector["html"]
+
+
+CYBER_SOURCE_CHECKOUT = VECTORS["cyber_source_hosted_checkout"]
+
+
+def cyber_source_data(data: dict[str, Any]) -> CyberSourcePaymentData:
+    """A CyberSource payment from a vector's snake_case data; the amount is parsed."""
+    return CyberSourcePaymentData(
+        **{
+            **data,
+            "amount": Amount.parse(data["amount"]),
+            "transaction_type": CyberSourceTransactionType(data["transaction_type"]),
+        }
+    )
+
+
+@pytest.mark.parametrize("case", CYBER_SOURCE_CHECKOUT["cases"], ids=lambda case: case["name"])
+def test_cyber_source_hosted_checkout(case: dict[str, Any]) -> None:
+    vector = CYBER_SOURCE_CHECKOUT
+    gateway = CyberSource(CyberSourceConfig(**vector["config"]))
+    payment = gateway.hosted_checkout(cyber_source_data({**vector["data"], **case["data"]}))
+    values = payment.values()
+    signed = ",".join(f"{name}={values[name]}" for name in case["signed_field_names"].split(","))
+
+    assert payment.action == vector["action"]
+    assert payment.order_id == vector["data"]["order_id"]
+    assert [field.name for field in payment.fields] == [name for name, _ in case["fields"]]
+    assert values["signed_field_names"] == case["signed_field_names"]
+    assert re.fullmatch(vector["patterns"]["transaction_uuid"], values["transaction_uuid"])
+    assert re.fullmatch(vector["patterns"]["signed_date_time"], values["signed_date_time"])
+    assert values["signature"] == hmac_base64(signed, vector["config"]["secret_key"])
+    for name, value in case["fields"]:
+        if value is not None:
+            assert values[name] == value, name
+
+
+@pytest.mark.parametrize(
+    "case", CYBER_SOURCE_CHECKOUT["order_id_limits"], ids=lambda case: str(len(case["value"]))
+)
+def test_cyber_source_order_id_limits(case: dict[str, Any]) -> None:
+    data = cyber_source_data({**CYBER_SOURCE_CHECKOUT["data"], snake("orderId"): case["value"]})
+    if case["error"] is None:
+        CyberSource.validate(data)
+        assert data.order_id == case["value"]
+    else:
+        assert found(CyberSource.validate, data) == snake_errors({"orderId": case["error"]})
 
 
 MESSAGES = VECTORS["messages"]
