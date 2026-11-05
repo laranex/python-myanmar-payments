@@ -1546,7 +1546,7 @@
             "WAVE_PAY_BASE_REDIRECT_URL": "https://payments.wavemoney.io",
             "WAVE_PAY_MINI_APP_CLIENT_ID": "client",
             "WAVE_PAY_MINI_APP_CLIENT_SECRET": "client-secret",
-            "WAVE_PAY_MINI_APP_MINI_APP_ID": "MINI456",
+            "WAVE_PAY_MINI_APP_APP_ID": "MINI456",
             "WAVE_PAY_MINI_APP_SECRET_KEY": "test-secret",
             "WAVE_PAY_MINI_APP_BASE_URL": "https://api.wavemoney.io:8100",
             "AYA_PAY_APP_KEY": "app-key",
@@ -2132,14 +2132,14 @@
             },
             {
                 "gateway": "wave_pay_mini_app",
-                "variable": "WAVE_PAY_MINI_APP_MINI_APP_ID",
+                "variable": "WAVE_PAY_MINI_APP_APP_ID",
                 "value": null,
                 "key": "mini_app_id",
                 "message": "The wave_pay_mini_app configuration is missing [mini_app_id]."
             },
             {
                 "gateway": "wave_pay_mini_app",
-                "variable": "WAVE_PAY_MINI_APP_MINI_APP_ID",
+                "variable": "WAVE_PAY_MINI_APP_APP_ID",
                 "value": "   ",
                 "key": "mini_app_id",
                 "message": "The wave_pay_mini_app configuration is missing [mini_app_id]."
@@ -3195,7 +3195,7 @@
                 "env": {
                     "WAVE_PAY_MINI_APP_BASE_URL": null,
                     "WAVE_PAY_MINI_APP_CLIENT_ID": null,
-                    "WAVE_PAY_MINI_APP_MINI_APP_ID": null
+                    "WAVE_PAY_MINI_APP_APP_ID": null
                 },
                 "key": "client_id",
                 "message": "The wave_pay_mini_app configuration is missing [client_id]."

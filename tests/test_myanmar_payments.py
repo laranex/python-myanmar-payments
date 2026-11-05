@@ -48,7 +48,7 @@ ENV = {
     "WAVE_PAY_BASE_REDIRECT_URL": "https://payments.wavemoney.io",
     "WAVE_PAY_MINI_APP_CLIENT_ID": "c",
     "WAVE_PAY_MINI_APP_CLIENT_SECRET": "s",
-    "WAVE_PAY_MINI_APP_MINI_APP_ID": "m",
+    "WAVE_PAY_MINI_APP_APP_ID": "m",
     "WAVE_PAY_MINI_APP_SECRET_KEY": "k",
     "WAVE_PAY_MINI_APP_BASE_URL": "https://api.wavemoney.io:8100",
     "AYA_PAY_APP_KEY": "a",

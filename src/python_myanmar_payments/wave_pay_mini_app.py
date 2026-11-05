@@ -104,7 +104,7 @@ class WavePayMiniAppConfig:
         """Reads the ``WAVE_PAY_MINI_APP_*`` environment variables.
 
         ``WAVE_PAY_MINI_APP_CLIENT_ID``, ``WAVE_PAY_MINI_APP_CLIENT_SECRET``,
-        ``WAVE_PAY_MINI_APP_MINI_APP_ID``, ``WAVE_PAY_MINI_APP_SECRET_KEY``,
+        ``WAVE_PAY_MINI_APP_APP_ID``, ``WAVE_PAY_MINI_APP_SECRET_KEY``,
         ``WAVE_PAY_MINI_APP_BASE_URL`` and ``MYANMAR_PAYMENTS_HTTP_TIMEOUT``.
         Defaults to ``os.environ``.
         """
@@ -112,7 +112,7 @@ class WavePayMiniAppConfig:
         return cls(
             client_id=env_first(env, "WAVE_PAY_MINI_APP_CLIENT_ID"),
             client_secret=env_first(env, "WAVE_PAY_MINI_APP_CLIENT_SECRET"),
-            mini_app_id=env_first(env, "WAVE_PAY_MINI_APP_MINI_APP_ID"),
+            mini_app_id=env_first(env, "WAVE_PAY_MINI_APP_APP_ID"),
             secret_key=env_first(env, "WAVE_PAY_MINI_APP_SECRET_KEY"),
             base_url=env_first(env, "WAVE_PAY_MINI_APP_BASE_URL"),
             timeout_seconds=env_first(env, "MYANMAR_PAYMENTS_HTTP_TIMEOUT"),

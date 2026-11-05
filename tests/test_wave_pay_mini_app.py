@@ -33,7 +33,7 @@ TOKEN = {"token_type": "Bearer", "access_token": "TOKEN", "expires_in": 300}
 ENV = {
     "WAVE_PAY_MINI_APP_CLIENT_ID": "client",
     "WAVE_PAY_MINI_APP_CLIENT_SECRET": "client-secret",
-    "WAVE_PAY_MINI_APP_MINI_APP_ID": "MINI456",
+    "WAVE_PAY_MINI_APP_APP_ID": "MINI456",
     "WAVE_PAY_MINI_APP_SECRET_KEY": "test-secret",
     "WAVE_PAY_MINI_APP_BASE_URL": " https://wave.test/ ",
 }
