@@ -52,7 +52,16 @@ from ._support import (
     utc_now,
 )
 from ._validate import AmountRule, Validator
-from ._values import ASCII_WHITESPACE, get, is_nested, object_at, optional, scalar_string, trimmed
+from ._values import (
+    ASCII_WHITESPACE,
+    ascii_trim,
+    get,
+    is_nested,
+    object_at,
+    optional,
+    scalar_string,
+    trimmed,
+)
 
 __all__ = [
     "AsyncKbzPay",
@@ -208,12 +217,14 @@ class KbzPaySigner:
         """Whether ``fields["sign"]`` matches, compared in constant time.
 
         Nested values are never signed, so fields carrying one are rejected
-        rather than partly trusted.
+        rather than partly trusted. ASCII whitespace and NUL around the received
+        ``sign`` are trimmed (KBZ's own examples show padded values), and it is
+        compared case-insensitively.
         """
         if any(is_nested(value) for value in fields.values()):
             return False
         sign = fields.get("sign")
-        return isinstance(sign, str) and safe_equal(self.sign(fields), sign.upper())
+        return isinstance(sign, str) and safe_equal(self.sign(fields), ascii_trim(sign).upper())
 
 
 _ORDER_ID = re.compile(r"[A-Za-z0-9_]+")

@@ -200,7 +200,8 @@ _PAYLOAD_FIELDS = (
     "dateTime",
 )
 
-_REQUIRED_FIELDS = ("merchOrderId", "tranId", "amount", "currencyCode", "statusCode")
+_REQUIRED_FIELDS = ("merchOrderId", "amount", "currencyCode", "statusCode")
+_SUCCESSFUL = "00"
 _STATUS_CODE = re.compile(r"[0-9]{2}")
 _AMOUNT = re.compile(r"[0-9]+(?:\.[0-9]+)?")
 _DATE_TIME = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}")
@@ -233,7 +234,11 @@ class _AyaPayBase:
             Validator()
             .required("order_id", data.order_id)
             .length("order_id", data.order_id, 6, 40)
-            .amount("amount", data.amount, AmountRule("AYA Payment Gateway", 0))
+            .amount(
+                "amount",
+                data.amount,
+                AmountRule("AYA Payment Gateway", 0, undocumented_decimals=True),
+            )
             .required("channel", data.channel)
             .when(
                 not isinstance(data.method, str) or data.method not in _METHODS,
@@ -301,7 +306,11 @@ class _AyaPayBase:
         )
 
     def handle_callback(self, request: CallbackRequest) -> PaymentCallback:
-        """Verifies AYA's backend callback."""
+        """Verifies AYA's backend callback.
+
+        AYA sends ``tranId`` only for a successful payment, so
+        ``gateway_reference`` may be ``None`` for a failed or pending one.
+        """
         return _to_callback(self._verified_payload(lossless_input(request), "callback"))
 
     def verify_redirect(self, request: CallbackRequest) -> PaymentCallback:
@@ -397,7 +406,7 @@ class _AyaPayBase:
             order_id=get(payload, "merchOrderId"),
             status=resolve_status(_STATUSES, status_code),
             gateway_status=status_code,
-            gateway_reference=optional(payload, "tranId"),
+            gateway_reference=optional(payload, "tranId") or None,
             amount=optional(payload, "amount"),
             raw=to_plain_object(payload),
         )
@@ -457,7 +466,9 @@ def _well_formed(values: Mapping[str, str]) -> bool:
 
     The checksum joins the values with ":", so a value holding a ":" could be
     re-split into other fields (e.g. a "02" status into "00"). Only dateTime may
-    hold one, and only in AYA's date and time format (or empty).
+    hold one, and only in AYA's date and time format (or empty). ``tranId`` is
+    required only for a successful payment (``statusCode`` ``00``); a failed,
+    rejected or pending payload may leave it out.
     """
     for name, value in values.items():
         if name == "dateTime":
@@ -466,6 +477,8 @@ def _well_formed(values: Mapping[str, str]) -> bool:
         elif ":" in value:
             return False
     if any(values.get(name, "") == "" for name in _REQUIRED_FIELDS):
+        return False
+    if values["statusCode"] == _SUCCESSFUL and values.get("tranId", "") == "":
         return False
     return (
         _STATUS_CODE.fullmatch(values["statusCode"]) is not None
@@ -480,7 +493,7 @@ def _to_callback(payload: LosslessObject) -> PaymentCallback:
         order_id=get(payload, "merchOrderId"),
         status=resolve_status(_STATUSES, status_code),
         gateway_status=status_code,
-        gateway_reference=optional(payload, "tranId"),
+        gateway_reference=optional(payload, "tranId") or None,
         amount=optional(payload, "amount"),
         raw=to_plain_object(payload),
     )

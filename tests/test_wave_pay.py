@@ -135,7 +135,7 @@ class TestWavePay:
                     merchant_reference_id="r" * 101,
                     callback_url="https://shop.test/" + "a" * 238,
                     return_url="https://shop.test/" + "a" * 238,
-                    description="ဒ" * 86,
+                    description="ဒ" * 256,
                     additional_field_3="x" * 51,
                     additional_field_4="x" * 51,
                     additional_field_5="x" * 51,
@@ -243,7 +243,7 @@ class TestWavePay:
             ({"time_to_live_seconds": "600"}, "time_to_live_seconds"),
             ({"additional_field_3": 5}, "additional_field_3"),
             ({"additional_field_4": "x" * 51}, "additional_field_4"),
-            ({"additional_field_5": "ဒ" * 17}, "additional_field_5"),
+            ({"additional_field_5": "ဒ" * 51}, "additional_field_5"),
         ],
     )
     def test_validates_against_wave_rules(self, change: Any, field: str) -> None:

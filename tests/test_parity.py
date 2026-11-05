@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -922,3 +923,75 @@ def test_wave_pay_mini_app_validation(mode: str, case: dict[str, Any]) -> None:
     data = mini_app_data({**MINI_APP_VALIDATION["data"], **case["data"]})
     gateway = mini_app(mode, MINI_APP_PAYMENT["config"], FakeServer())
     assert found(gateway.payment, data) == snake_errors(case["errors"])
+
+
+CHARACTER_LIMITS = VECTORS["character_limits"]
+
+
+def character_limit_data(gateway: str, field: str, value: str) -> tuple[Any, Any]:
+    data = {**CHARACTER_LIMITS["data"][gateway], snake(field): value}
+    if gateway == "aya_pay":
+        return AyaPay.validate, AyaPayPaymentData(
+            **{**data, "method": AyaPayMethod(data["method"])}
+        )
+    if gateway == "yoma_mmqr":
+        return YomaMmqr.validate, YomaMmqrPaymentData(**data)
+    return CyberSource.validate, CyberSourcePaymentData(**data)
+
+
+@pytest.mark.parametrize(
+    "case",
+    CHARACTER_LIMITS["cases"],
+    ids=lambda case: f"{case['gateway']} {case['field']} {len(case['value'])}",
+)
+def test_character_limits(case: dict[str, Any]) -> None:
+    """Every length limit counts characters (code points), not bytes."""
+    field = snake(case["field"])
+    validate, data = character_limit_data(case["gateway"], case["field"], case["value"])
+    if case["error"] is None:
+        validate(data)
+        assert getattr(data, field) == case["value"]
+    else:
+        assert errors_of(validate, data) == {field: case["error"].replace(case["field"], field)}
+
+
+@pytest.mark.parametrize("case", VECTORS["aya_pay_tran_id"]["cases"], ids=lambda case: case["name"])
+@pytest.mark.parametrize("context", ["callback", "redirect", "enquiry response"])
+def test_aya_pay_tran_id(mode: str, context: str, case: dict[str, Any]) -> None:
+    """tranId is required only for a successful payment, in every AYA Pay path."""
+    signed = {"payload": case["payload"], "checkSum": case["check_sum"]}
+    server = FakeServer({"status": "00", "message": "success", "data": signed})
+    config = AyaPayConfig(**gateway_config("aya_pay", app_secret=SECRETS["aya_pay_app_secret"]))
+    gateway = make(mode, AyaPay, AsyncAyaPay, config, server)
+
+    def call() -> Any:
+        if context == "callback":
+            return gateway.handle_callback(
+                CallbackRequest(
+                    body=json.dumps(signed), headers={"Content-Type": "application/json"}
+                )
+            )
+        if context == "redirect":
+            return gateway.verify_redirect(CallbackRequest(query=signed))
+        return run(gateway.status("ORDER_1"))
+
+    expected = case["expected"]
+    if not expected["valid"]:
+        with pytest.raises(SignatureVerificationError) as info:
+            call()
+        assert str(info.value) == f"AYA Pay {context} payload is malformed."
+        return
+    result = call()
+    assert [
+        result.order_id,
+        str(result.status),
+        result.gateway_status,
+        result.gateway_reference,
+        result.amount,
+    ] == [
+        "ORDER_1",
+        expected["status"],
+        expected["gateway_status"],
+        expected.get("gateway_reference"),
+        "1000",
+    ]

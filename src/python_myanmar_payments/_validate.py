@@ -1,4 +1,8 @@
-"""Validates payment data against each gateway's documented limits."""
+"""Validates payment data against each gateway's documented limits.
+
+Length limits count characters (Unicode code points), not bytes, so a
+255-character Burmese description fits a 255-character limit.
+"""
 
 from __future__ import annotations
 
@@ -24,11 +28,19 @@ class AmountRule:
     """Limits the amount's text length."""
     allow_zero: bool = False
     """Accepts an amount of 0."""
+    undocumented_decimals: bool = False
+    """Whole amounts only because the gateway's docs show no decimal amounts,
+    rather than because they rule decimals out."""
 
 
-def byte_length(value: str) -> int:
-    """UTF-8 byte length, matching the byte limits in the gateway documentation."""
-    return len(value.encode("utf-8", errors="surrogatepass"))
+def characters(value: str) -> int:
+    """The number of characters (Unicode code points) in ``value``.
+
+    Text decoded with ``errors="surrogateescape"`` keeps each byte that is not
+    valid UTF-8 as one code point, so it counts as one character, like PHP's
+    and Go's character counts.
+    """
+    return len(value)
 
 
 def is_int(value: object) -> bool:
@@ -55,7 +67,7 @@ class Validator:
 
     def length(self, field: str, value: object, minimum: int, maximum: int) -> Validator:
         if isinstance(value, str) and value != "":
-            size = byte_length(value)
+            size = characters(value)
             if size < minimum or size > maximum:
                 self._fail(
                     field,
@@ -66,7 +78,7 @@ class Validator:
         return self
 
     def max(self, field: str, value: object, maximum: int) -> Validator:
-        if isinstance(value, str) and byte_length(value) > maximum:
+        if isinstance(value, str) and characters(value) > maximum:
             self._fail(field, f"The {field} field must not be greater than {maximum} characters.")
         return self
 
@@ -117,8 +129,13 @@ class Validator:
         if rule.max_decimals == 0 and places > 0:
             return self._fail(
                 field,
-                f"{rule.gateway} does not accept decimal amounts; "
-                f"the {field} field must be a whole number.",
+                f"{rule.gateway} "
+                + (
+                    "documents no decimal amounts"
+                    if rule.undocumented_decimals
+                    else "does not accept decimal amounts"
+                )
+                + f"; the {field} field must be a whole number.",
             )
         if rule.max_decimals is not None and rule.max_decimals > 0 and places > rule.max_decimals:
             return self._fail(

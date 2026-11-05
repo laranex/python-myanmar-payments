@@ -42,7 +42,7 @@ kbz = payments.kbz_pay()
 
 ### Amounts
 
-Amounts are `Amount.kyat(1000)`, `Amount.parse("1000.50")`, a whole `int`, decimal text or a `Decimal`; never a float such as `10.5`. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave Pay, Wave Pay Mini App, AYA and Yoma take whole kyat. Invalid data raises `InvalidPaymentDataError` with `errors` per field (`order_id`, `amount`, ...), before any request is sent; a negative amount is reported as `The amount field must not be negative.` with the other errors. Callback, return and cancel URLs must be plain ASCII `http://` or `https://` URLs with a valid host name or bracketed IP (no spaces, no `_` or non-ASCII host names). Compare a gateway's amount by value with `amount.equals(callback.amount)`.
+Amounts are `Amount.kyat(1000)`, `Amount.parse("1000.50")`, a whole `int`, decimal text or a `Decimal`; never a float such as `10.5`. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave Pay, Wave Pay Mini App, AYA and Yoma take whole kyat. Invalid data raises `InvalidPaymentDataError` with `errors` per field (`order_id`, `amount`, ...), before any request is sent; length limits count characters, not bytes, so Burmese text gets the full limit; a negative amount is reported as `The amount field must not be negative.` with the other errors. Callback, return and cancel URLs must be plain ASCII `http://` or `https://` URLs with a valid host name or bracketed IP (no spaces, no `_` or non-ASCII host names). Compare a gateway's amount by value with `amount.equals(callback.amount)`.
 
 ### Start a payment
 
@@ -112,7 +112,7 @@ return HttpResponse(ack.body, status=ack.status, headers=ack.headers)
 
 - Give the package the raw body bytes, the headers and the query string; `handle_callback()` and `verify_redirect()` are plain methods on the async classes too.
 - `SignatureVerificationError` covers both a bad signature (`... verification failed.`) and a signed callback with malformed values (`... is malformed.`); answer both with a 400.
-- Check AYA's browser return with `aya.verify_redirect(request)`.
+- Check AYA's browser return with `aya.verify_redirect(request)`. AYA sends `tranId` only for a successful payment, so `callback.gateway_reference` may be `None` for a failed or pending one.
 - Wave Pay Mini App callbacks carry neither the mini app ID nor the callback URL, so pass the callback URL the payment was signed with: `mini_app.handle_callback(request, "https://shop.test/payments/wave-pay-mini-app/callback")`. `successful` is `SUCCESSFUL`, `processing` is `PENDING`, `failed` is `FAILED`; `merchantRefId` is in `callback.raw`. Wave expects an empty 200.
 - Yoma MMQR signs only the order number and status, so its callback has no `amount`: match the order number to your stored order (its QR was generated for the stored amount) and, to confirm, call `yoma.status(reference)` with that order's QR reference (`refLabel`). The status result has no amount either, so trust your stored amount.
 - For production, store the verified callback, acknowledge immediately, then process it once in the background.

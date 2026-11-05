@@ -144,7 +144,7 @@ class WavePayItem:
 class WavePayPaymentData:
     """A Wave Pay payment request. Wave only accepts whole kyat (MMK).
 
-    Length limits count UTF-8 bytes.
+    Length limits count characters, not bytes.
     """
 
     order_id: str
@@ -209,6 +209,20 @@ _CALLBACK_FIELDS = (
     "paymentRequestId",
     "requestTime",
 )
+
+
+def _callback_key(name: str, payload: Mapping[str, object]) -> str:
+    """The key a hashed callback field is read from.
+
+    The spec's callback example spells the time to live ``timeToLiveSeconds``
+    while its field table and hash formula say ``timeToLiveInSeconds``, so the
+    hash takes ``timeToLiveSeconds`` whenever that key is present (even null)
+    and ``timeToLiveInSeconds`` otherwise: one value either way.
+    """
+    if name == "timeToLiveSeconds" and name not in payload:
+        return "timeToLiveInSeconds"
+    return name
+
 
 _RULE = AmountRule("Wave Pay", 0)
 _CURRENCY = "MMK"
@@ -305,10 +319,11 @@ class _WavePayBase:
         ``_`` and ``-`` fails with "Wave Pay callback is malformed.".
         """
         payload = lossless_body(request)
-        nested = any(is_nested(payload.get(name)) for name in _CALLBACK_FIELDS)
+        keys = [_callback_key(name, payload) for name in _CALLBACK_FIELDS]
+        nested = any(is_nested(payload.get(key)) for key in keys)
         parts = []
-        for name in _CALLBACK_FIELDS:
-            text = scalar_string(payload.get(name))
+        for key in keys:
+            text = scalar_string(payload.get(key))
             parts.append("null" if text is None else text)
         expected = self._hash(parts)
         hash_value = payload.get("hashValue")
